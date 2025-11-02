@@ -28,11 +28,15 @@ class MatchingService:
             return []
 
         candidates: list[GroupMatchCandidate] = []
-        others = db.execute(
-            select(Group)
-            .options(joinedload(Group.members))
-            .where(Group.id != group_id)
-        ).scalars()
+        others = (
+            db.execute(
+                select(Group)
+                .options(joinedload(Group.members))
+                .where(Group.id != group_id)
+            )
+            .unique()
+            .scalars()
+        )
 
         for group in others:
             profile = cls._build_group_profile(db, group.id)
@@ -62,11 +66,15 @@ class MatchingService:
 
     @classmethod
     def _build_group_profile(cls, db: Session, group_id: str) -> GroupProfile | None:
-        group = db.execute(
-            select(Group)
-            .options(joinedload(Group.members).joinedload(GroupMembership.user))
-            .where(Group.id == group_id)
-        ).scalar_one_or_none()
+        group = (
+            db.execute(
+                select(Group)
+                .options(joinedload(Group.members).joinedload(GroupMembership.user))
+                .where(Group.id == group_id)
+            )
+            .unique()
+            .scalar_one_or_none()
+        )
         if group is None:
             return None
         member_ids = [membership.user_id for membership in group.members]
@@ -87,7 +95,10 @@ class MatchingService:
         )
         availability_windows = cls._merge_windows(
             [
-                (max(row.start_time, window_start), min(row.end_time, window_end))
+                (
+                    max(cls._ensure_utc(row.start_time), window_start),
+                    min(cls._ensure_utc(row.end_time), window_end),
+                )
                 for row in availability_rows
             ]
         )
@@ -129,3 +140,9 @@ class MatchingService:
                     total += int((end - start).total_seconds() // 60)
                 j += 1
         return total
+
+    @staticmethod
+    def _ensure_utc(moment: datetime) -> datetime:
+        if moment.tzinfo is None:
+            return moment.replace(tzinfo=timezone.utc)
+        return moment.astimezone(timezone.utc)

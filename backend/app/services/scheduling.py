@@ -103,17 +103,21 @@ class AvailabilityService:
 
 class SchedulingService:
     @staticmethod
+    def default_preferences() -> MeetingPreferences:
+        return MeetingPreferences(
+            duration_minutes=settings.default_meeting_duration_minutes,
+            window_days=settings.meeting_window_days,
+            limit=5,
+        )
+
+    @staticmethod
     def suggest_meetings(
         db: Session,
         *,
         group_id: str,
         preferences: MeetingPreferences | None = None,
     ) -> List[MeetingSuggestion]:
-        prefs = preferences or MeetingPreferences(
-            duration_minutes=settings.default_meeting_duration_minutes,
-            window_days=settings.meeting_window_days,
-            limit=5,
-        )
+        prefs = preferences or SchedulingService.default_preferences()
 
         member_ids = GroupService.get_member_ids(db, group_id)
         if not member_ids:
