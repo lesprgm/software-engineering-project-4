@@ -1,0 +1,20 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.db
+
+# Environment files
+.env
+.env.*
+
+# Virtual environments
+venv/
+.venv/
+
+# Local uploads and cache directories
+backend/app/uploads/
+
+# Node modules and build output
+node_modules/
+dist/
