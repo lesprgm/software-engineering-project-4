@@ -4,6 +4,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .database import Base, engine
 from app.routers import groups
+from app.routers import groups, places
+
+
 
 settings = get_settings()
 
@@ -25,6 +28,8 @@ app.add_middleware(
 )
 
 app.include_router(groups.router)
+app.include_router(places.router)
+
 
 
 @app.get("/health", tags=["health"])

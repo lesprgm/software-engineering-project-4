@@ -115,14 +115,14 @@ class GroupService:
             db.execute(
                 select(GroupMessage)
                 .where(GroupMessage.group_id == group_id)
-                .order_by(GroupMessage.created_at.desc())
+                .order_by(GroupMessage.created_at.asc())
                 .limit(limit)
                 .offset(offset)
             )
             .scalars()
             .all()
         )
-        return PaginatedMessages(messages=list(reversed(messages)), total=total)
+        return PaginatedMessages(messages=messages, total=total)
 
     @classmethod
     def get_member_ids(cls, db: Session, group_id: str) -> List[str]:

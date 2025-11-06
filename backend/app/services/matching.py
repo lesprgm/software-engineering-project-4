@@ -32,7 +32,7 @@ class MatchingService:
             select(Group)
             .options(joinedload(Group.members))
             .where(Group.id != group_id)
-        ).scalars()
+        ).unique().scalars().all()
 
         for group in others:
             profile = cls._build_group_profile(db, group.id)
@@ -66,7 +66,7 @@ class MatchingService:
             select(Group)
             .options(joinedload(Group.members).joinedload(GroupMembership.user))
             .where(Group.id == group_id)
-        ).scalar_one_or_none()
+        ).unique().scalar_one_or_none()
         if group is None:
             return None
         member_ids = [membership.user_id for membership in group.members]
@@ -85,9 +85,16 @@ class MatchingService:
             .scalars()
             .all()
         )
+        def _ensure_utc(dt):
+            if dt is None:
+                return dt
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
         availability_windows = cls._merge_windows(
             [
-                (max(row.start_time, window_start), min(row.end_time, window_end))
+                (max(_ensure_utc(row.start_time), window_start), min(_ensure_utc(row.end_time), window_end))
                 for row in availability_rows
             ]
         )
