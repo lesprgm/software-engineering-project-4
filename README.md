@@ -180,8 +180,3 @@ Access the app at:
 * AI features (match insights, ideas, event search) can call OpenAI or Gemini APIs through backend wrappers.
 * SQLite is fine for local testing; you can switch to PostgreSQL if desired.
 * Prioritize completing core features over scaling or deployment.
-
----
-
-Would you like me to add a **`requirements.txt`** template (with FastAPI, SQLAlchemy, JWT, etc.) next?
-That way your backend team can install everything quickly.

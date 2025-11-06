@@ -1,76 +1,95 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import Column, String, ForeignKey, Text, DateTime
-from sqlalchemy.orm import relationship
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.database import Base
+from ..database import Base
 
 
 class Group(Base):
     __tablename__ = "groups"
 
-    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
-    name = Column(String, nullable=False)
-    description = Column(Text, nullable=True)
-    invite_code = Column(String, nullable=False, unique=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid4()))
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    invite_code: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    # Relationships
-    members = relationship("GroupMembership", back_populates="group", cascade="all, delete-orphan")
-    availabilities = relationship("Availability", back_populates="group", cascade="all, delete-orphan")
-    messages = relationship("GroupMessage", back_populates="group", cascade="all, delete-orphan")
-    meetings = relationship("GroupMeeting", back_populates="group", cascade="all, delete-orphan")
+    members: Mapped[list["GroupMembership"]] = relationship(
+        "GroupMembership", back_populates="group", cascade="all, delete-orphan"
+    )
+    availabilities: Mapped[list["Availability"]] = relationship(
+        "Availability", back_populates="group", cascade="all, delete-orphan"
+    )
+    messages: Mapped[list["GroupMessage"]] = relationship(
+        "GroupMessage", back_populates="group", cascade="all, delete-orphan"
+    )
+    meetings: Mapped[list["GroupMeeting"]] = relationship(
+        "GroupMeeting", back_populates="group", cascade="all, delete-orphan"
+    )
 
 
 class GroupMembership(Base):
+    """Associates users with a group and tracks their role."""
     __tablename__ = "group_memberships"
 
-    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    group_id = Column(String, ForeignKey("groups.id"))
-    role = Column(String, default="member")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(String, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[str] = mapped_column(String, default="member", nullable=False)
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    # relationships
-    group = relationship("Group", back_populates="members")
-    user = relationship("User")
-
-
-class GroupMessage(Base):
-    __tablename__ = "group_messages"
-
-    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
-    group_id = Column(String, ForeignKey("groups.id"))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    content = Column(Text)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
-
-    group = relationship("Group", back_populates="messages")
-    user = relationship("User")
-
-
-class GroupMeeting(Base):
-    __tablename__ = "group_meetings"
-
-    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
-    group_id = Column(String, ForeignKey("groups.id"))
-    topic = Column(String, nullable=True)
-    location = Column(String, nullable=True)
-    scheduled_start = Column(DateTime(timezone=True), nullable=True)
-    scheduled_end = Column(DateTime(timezone=True), nullable=True)
-    suggested_by = Column(String, nullable=True)
-    note = Column(Text, nullable=True)
-
-    group = relationship("Group", back_populates="meetings")
+    group: Mapped[Group] = relationship("Group", back_populates="members")
+    user = relationship("User", backref="group_memberships")
 
 
 class Availability(Base):
-    __tablename__ = "availability"
+    """Stores a single availability window for a user within a group."""
+    __tablename__ = "availabilities"
 
-    id = Column(String, primary_key=True, index=True, default=lambda: str(uuid4()))
-    group_id = Column(String, ForeignKey("groups.id"))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    end_time = Column(DateTime(timezone=True), nullable=False)
-    timezone = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(String, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    end_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    timezone: Mapped[str] = mapped_column(String, default="UTC", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
 
-    group = relationship("Group", back_populates="availabilities")
+    group: Mapped[Group] = relationship("Group", back_populates="availabilities")
+    user = relationship("User", backref="availabilities")
+
+
+class GroupMessage(Base):
+    """Lightweight group chat storage."""
+    __tablename__ = "group_messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(String, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    content: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
+    )
+
+    group: Mapped[Group] = relationship("Group", back_populates="messages")
+
+
+class GroupMeeting(Base):
+    """Represents a confirmed meeting suggestion."""
+    __tablename__ = "group_meetings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    group_id: Mapped[str] = mapped_column(String, ForeignKey("groups.id", ondelete="CASCADE"), nullable=False)
+    scheduled_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    suggested_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    group: Mapped[Group] = relationship("Group", back_populates="meetings")
