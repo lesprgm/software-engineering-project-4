@@ -25,6 +25,8 @@ app.add_middleware(
 )
 
 app.include_router(groups.router)
+app.include_router(places.router)
+
 
 
 @app.get("/health", tags=["health"])
