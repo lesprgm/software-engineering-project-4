@@ -7,8 +7,12 @@ from typing import Iterable, List
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Availability, Group, GroupMembership
+from ..models import Availability, Group, GroupMembership, User
 from ..schemas.group import GroupMatchCandidate
+
+import math
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
 
 
 @dataclass
@@ -16,7 +20,6 @@ class GroupProfile:
     group: Group
     member_ids: List[str]
     availability_windows: List[tuple[datetime, datetime]]
-
 
 class MatchingService:
     LOOKAHEAD_DAYS = 14
@@ -146,3 +149,59 @@ class MatchingService:
         if moment.tzinfo is None:
             return moment.replace(tzinfo=timezone.utc)
         return moment.astimezone(timezone.utc)
+
+@dataclass
+class UserProfile:
+    id: int
+    name: str
+    interests: List[str]
+    bio: str
+
+
+
+class UserMatchingService:
+
+    @classmethod
+    def generate_user_matches(cls, db: Session, user_id:int, limit: int = 10):
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            return []
+        
+        candidates = db.query(User).filter(User.id != user_id).all()
+        user_profile = cls._build_user_profile(user)
+        matches = []
+
+        for candidate in candidates:
+            candidate_profile = cls._build_user_profile(candidate)
+            score = cls._calculate_similarity(user_profile, candidate_profile)
+            matches.append({
+                "user_id": candidate.id,
+                "name": candidate.display_name,
+                "score": score
+            })
+
+            matches.sort(key=lambda x: x['score'], reverse=True)
+            return matches[:limit]
+    
+    @staticmethod
+    def _build_user_profile(user: User) -> UserProfile:
+        return UserProfile(
+            id=user.id,
+            name=user.display_name,
+            interests=user.interests.split(",") if isinstance(user.interests, str) else user.interests,
+        )
+    
+    @staticmethod
+    def _calculate_similarity(user_a: UserProfile, user_b: UserProfile) -> float:
+
+        interests_a = set(i.lower().strip() for i in user_a.interests)
+        interests_b = set(i.lower().strip() for i in user_b.interests)
+
+        common_interests = len(set(interests_a) & set(interests_b))
+        total_interests = len(set(interests_a) | set(interests_b))
+        interest_score = common_interests / total_interests if total_interests > 0 else 0
+
+        # Will change if we include the bio feature
+        return interest_score
+

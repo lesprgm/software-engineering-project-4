@@ -14,5 +14,10 @@ class User(Base):
     display_name = Column(String, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+#    gender = Column(String)
+#   age = Column(Integer)
+#    interests = Column(JSON)
+#   personality = Column(JSON)
+
     def __repr__(self) -> str:
         return f"User(id={self.id}, email={self.email!r})"
