@@ -232,7 +232,7 @@ class UserMatchingService:
         total_interests = len(set(interests_a) | set(interests_b))
         interest_score = common_interests / total_interests if total_interests > 0 else 0
 
-        # Use Gemini to analyze compatibility (fall back safely if not configured)
+        # Use Gemini to analyze compatbility (fall back safely if not configured)
         ai_score = 0.0
         if model is not None:
             try:
