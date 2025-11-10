@@ -13,7 +13,7 @@ export default function Button({ className, children, variant = 'primary', loadi
       disabled={disabled || loading}
       className={clsx(
         'inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors',
-        variant === 'primary' && 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
+        variant === 'primary' && 'bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-500',
         variant === 'secondary' && 'bg-gray-100 text-gray-900 hover:bg-gray-200 focus:ring-gray-500',
         variant === 'ghost' && 'bg-transparent text-gray-700 hover:bg-gray-100 focus:ring-gray-400',
         (disabled || loading) && 'opacity-60 cursor-not-allowed',

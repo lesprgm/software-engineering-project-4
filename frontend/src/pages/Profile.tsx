@@ -212,7 +212,7 @@ export default function Profile() {
                       aria-pressed={active}
                       className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
                         active
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                          ? 'bg-rose-600 text-white border-rose-600 shadow-sm'
                           : 'bg-white/80 text-gray-700 border-gray-300 hover:border-gray-400'
                       }`}
                       onClick={() => toggleInterest(tag)}

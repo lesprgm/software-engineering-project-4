@@ -157,7 +157,7 @@ export default function Dates() {
             <p className="text-sm text-gray-600">Based on your shared interests, here are a couple of ideas to choose from. Pick one or suggest your own.</p>
             <div className="grid md:grid-cols-2 gap-3">
               {openOptions.options.map((opt, idx) => (
-                <label key={idx} className={`block rounded-xl p-3 cursor-pointer transition-shadow ${selectedIdx === idx ? 'ring-2 ring-blue-600' : ''}`}>
+                <label key={idx} className={`block rounded-xl p-3 cursor-pointer transition-shadow ${selectedIdx === idx ? 'ring-2 ring-rose-600' : ''}`}>
                   <input
                     type="radio"
                     name="plan"

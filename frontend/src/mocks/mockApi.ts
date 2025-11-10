@@ -17,6 +17,9 @@ const db = {
   events: [
     { id: 'e1', title: 'Hack Night', date: new Date(Date.now() + 86400000).toISOString(), location: 'CS Lab', tags: ['tech', 'coding'], imageUrl: 'https://via.placeholder.com/800x400?text=Hack+Night', lat: 37.8715, lng: -122.2730, description: 'Bring your laptop and ideas for a casual coding jam.' },
     { id: 'e2', title: 'Open Mic', date: new Date(Date.now() + 2*86400000).toISOString(), location: 'Student Center', tags: ['music'], imageUrl: 'https://via.placeholder.com/800x400?text=Open+Mic', lat: 37.8721, lng: -122.2690, description: 'Showcase your talent: music, poetry, comedy welcome.' },
+    // Add your own posters in frontend/public/events and update paths below
+    { id: 'e3', title: 'Karaoke Night', date: new Date(Date.now() + 3*86400000).toISOString(), location: 'The Underground', tags: ['music', 'karaoke'], imageUrl: `${import.meta.env.BASE_URL || '/'}events/karaoke.jpg`, description: 'Grab the mic and sing with friends. Casual vibes, bring your energy.' },
+    { id: 'e4', title: 'Ladies Night', date: new Date(Date.now() + 4*86400000).toISOString(), location: 'Downtown Venue', tags: ['nightlife'], imageUrl: `${import.meta.env.BASE_URL || '/'}events/ladies-night.jpg`, description: 'Special deals and music all night.' },
   ] as Event[],
   places: [
     { id: 'p1', name: 'Campus Cafe', rating: 4.3, tags: ['coffee', 'quiet'], description: 'Cozy for study dates.' },
