@@ -1,3 +1,4 @@
+from .places import Place
 from .group import Availability, Group, GroupMeeting, GroupMembership, GroupMessage
 from .user import User
 

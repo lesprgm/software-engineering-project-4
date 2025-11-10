@@ -34,6 +34,11 @@ class MatchingService:
             return []
 
         candidates: list[GroupMatchCandidate] = []
+        others = db.execute(
+            select(Group)
+            .options(joinedload(Group.members))
+            .where(Group.id != group_id)
+        ).unique().scalars().all()
         others = (
             db.execute(
                 select(Group)
@@ -72,6 +77,11 @@ class MatchingService:
 
     @classmethod
     def _build_group_profile(cls, db: Session, group_id: str) -> GroupProfile | None:
+        group = db.execute(
+            select(Group)
+            .options(joinedload(Group.members).joinedload(GroupMembership.user))
+            .where(Group.id == group_id)
+        ).unique().scalar_one_or_none()
         group = (
             db.execute(
                 select(Group)
@@ -99,8 +109,16 @@ class MatchingService:
             .scalars()
             .all()
         )
+        def _ensure_utc(dt):
+            if dt is None:
+                return dt
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
         availability_windows = cls._merge_windows(
             [
+                (max(_ensure_utc(row.start_time), window_start), min(_ensure_utc(row.end_time), window_end))
                 (
                     max(cls._ensure_utc(row.start_time), window_start),
                     min(cls._ensure_utc(row.end_time), window_end),
