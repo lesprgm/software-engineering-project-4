@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List
-
+import google.generativeai as genai
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
+
+genai.configure(api_key="AIzaSyDf4Dzk1veC-5PUkm0finPUKBUlZfxUZ2c")  
+model = genai.GenerativeModel('gemini-pro')
 
 from ..models import Availability, Group, GroupMembership, User
 from ..schemas.group import GroupMatchCandidate
@@ -190,11 +193,11 @@ class UserMatchingService:
             id=user.id,
             name=user.display_name,
             interests=user.interests.split(",") if isinstance(user.interests, str) else user.interests,
+            bio=user.bio or ""  
         )
     
     @staticmethod
     def _calculate_similarity(user_a: UserProfile, user_b: UserProfile) -> float:
-
         interests_a = set(i.lower().strip() for i in user_a.interests)
         interests_b = set(i.lower().strip() for i in user_b.interests)
 
@@ -202,6 +205,37 @@ class UserMatchingService:
         total_interests = len(set(interests_a) | set(interests_b))
         interest_score = common_interests / total_interests if total_interests > 0 else 0
 
-        # Will change if we include the bio feature
-        return interest_score
+        # Use Gemini to analyze compatibility
+        try:
+            prompt = f"""
+            Analyze the compatibility between two users based on their interests, bios, and overall profiles:
+            
+            User A:
+            - Interests: {', '.join(interests_a)}
+            - Bio: {user_a.bio}
+            
+            User B:
+            - Interests: {', '.join(interests_b)}
+            - Bio: {user_b.bio}
+            
+            Rate their compatibility on a scale of 0 to 1, where 1 is highest compatibility.
+            Consider factors like:
+            - Interest overlap and complementarity
+            - Common themes and values expressed in their bios
+            - Writing style and personality similarities in bios
+            - Potential for meaningful interaction based on both interests and bio content
+            - Shared experiences or backgrounds implied in their bios
+            - Overall profile harmony
+            
+            Return only the numeric score between 0 and 1.
+            """
+            
+            response = model.generate_content(prompt)
+            ai_score = float(response.text.strip())
+            
+            final_score = (interest_score + ai_score) / 2
+            return min(max(final_score, 0), 1)  
+            
+        except Exception as e:
+            return interest_score
 
