@@ -116,7 +116,7 @@ export default function Events() {
               <Card className="overflow-hidden rounded-2xl border-0 shadow-xl">
                 <div className="relative h-64 md:h-72">
                   <img
-                    src={ev.imageUrl || 'https://via.placeholder.com/800x400?text=Event'}
+                    src={ev.imageUrl || ${import.meta.env.BASE_URL || '/'}events/placeholder.svg}
                     alt="Event poster"
                     className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
@@ -196,7 +196,7 @@ export default function Events() {
                 })()}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center justify-center rounded-md min-w-[14rem] px-4 py-2 text-sm font-medium bg-blue-600 text-white hover:bg-blue-700"
+                className="inline-flex items-center justify-center rounded-md min-w-[14rem] px-4 py-2 text-sm font-medium bg-rose-600 text-white hover:bg-rose-700"
               >
                 Add to Google Calendar
               </a>
@@ -215,4 +215,9 @@ export default function Events() {
     </div>
   );
 }
+
+
+
+
+
 
