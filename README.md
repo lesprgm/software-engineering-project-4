@@ -166,7 +166,6 @@ cd frontend
 npm install
 npm run dev
 ```
-
 Access the app at:
 
 * Frontend → [http://localhost:5173](http://localhost:5173)

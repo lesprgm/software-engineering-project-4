@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 240" role="img" aria-labelledby="title desc">
+  <title id="title">Upcoming Event Placeholder</title>
+  <desc id="desc">Abstract gradient background with calendar icon.</desc>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f97316" />
+      <stop offset="50%" stop-color="#ec4899" />
+      <stop offset="100%" stop-color="#6366f1" />
+    </linearGradient>
+  </defs>
+  <rect width="400" height="240" fill="url(#grad)" rx="24" />
+  <g fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <rect x="90" y="70" width="220" height="140" rx="16" />
+    <line x1="130" y1="70" x2="130" y2="40" />
+    <line x1="260" y1="70" x2="260" y2="40" />
+    <line x1="90" y1="120" x2="310" y2="120" />
+  </g>
+  <text x="200" y="210" fill="#ffffff" text-anchor="middle" font-family="'Inter', sans-serif" font-size="24" opacity="0.95">Campus Event</text>
+</svg>

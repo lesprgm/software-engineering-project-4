@@ -10,7 +10,7 @@ from app.routers import ai, events, groups, matches, places
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(groups.router)
 app.include_router(places.router)
 app.include_router(ai.router)
-app.include_router(events.router)
+app.include_router(events.router, prefix="/api")
 app.include_router(matches.router)
 
 

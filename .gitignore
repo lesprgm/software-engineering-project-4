@@ -13,12 +13,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Node / Vite / frontend
+# Frontend build / caches
 node_modules/
 frontend/node_modules/
-/frontend/node_modules/
 frontend/dist/
-# Vite build cache / optimized deps
 .vite/
 frontend/.vite/
 frontend/node_modules/.vite/
@@ -30,18 +28,7 @@ build/
 .turbo/
 .parcel-cache/
 
-# Testing/coverage
-coverage/
-.eslintcache
-.pytest_cache/
-htmlcov/
-.coverage
-
-# Coverage reports
-coverage.xml
-coverage-html/
-
-# Python
+# Python artifacts
 __pycache__/
 *.py[cod]
 *$py.class
@@ -49,7 +36,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
@@ -65,18 +51,18 @@ wheels/
 MANIFEST
 
 # Virtual environments
+.venv/
 venv/
 env/
 ENV/
 env.bak/
 venv.bak/
-.venv/
 
 # Pip / build artifacts
 pip-wheel-metadata/
 __pypackages__/
 
-# Database
+# Databases
 *.db
 *.sqlite
 *.sqlite3
@@ -91,42 +77,37 @@ uploads/
 backend/app/uploads/
 
 # Env files (keep examples tracked)
-# Ignore actual env files and local secrets, but keep example files
 .env
 .env.*
 backend/.env
 backend/.env.local
 frontend/.env
 frontend/.env.local
+.env.local
+.secret
 !/.env.example
 !/frontend/.env.example
 !/frontend/.env.local.example
 !/backend/.env.example
 
-# Sensitive local files
-.env.local
-.secret
+# Testing / coverage
+coverage/
+.eslintcache
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+coverage-html/
 
 # Build outputs / deploy
 *.local
 .vercel/
 
-# Misc generated
-*.egg-info/
-*.egg
-dist/
-build/
-
 # Misc
 *.swp
 *.swo
 *.lock
-.DS_Store
 .cache
-.idea/
-.vscode/
-
-# Editor temp files
 *~
 .project
 .classpath
