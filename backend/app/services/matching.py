@@ -3,12 +3,28 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Iterable, List
-
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from ..models import Availability, Group, GroupMembership
+from ..models import Availability, Group, GroupMembership, User
 from ..schemas.group import GroupMatchCandidate
+
+import math
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+
+# Load environment variables and configure Gemini (Google Generative AI)
+load_dotenv()
+_GENAI_API_KEY = os.getenv("GENAI_API_KEY")
+_GENAI_MODEL = os.getenv("GENAI_MODEL", "gemini-pro")
+if _GENAI_API_KEY:
+    genai.configure(api_key=_GENAI_API_KEY)
+    model = genai.GenerativeModel(_GENAI_MODEL)
+else:
+    model = None
 
 
 @dataclass
@@ -16,7 +32,6 @@ class GroupProfile:
     group: Group
     member_ids: List[str]
     availability_windows: List[tuple[datetime, datetime]]
-
 
 class MatchingService:
     LOOKAHEAD_DAYS = 14
@@ -164,3 +179,106 @@ class MatchingService:
         if moment.tzinfo is None:
             return moment.replace(tzinfo=timezone.utc)
         return moment.astimezone(timezone.utc)
+
+@dataclass
+class UserProfile:
+    id: int
+    name: str
+    interests: List[str]
+    bio: str
+
+
+
+class UserMatchingService:
+
+    @classmethod
+    def generate_user_matches(cls, db: Session, user_id:int, limit: int = 10):
+        user = db.query(User).filter(User.id == user_id).first()
+
+        if not user:
+            return []
+        
+        candidates = db.query(User).filter(User.id != user_id).all()
+        user_profile = cls._build_user_profile(user)
+        matches = []
+
+        for candidate in candidates:
+            candidate_profile = cls._build_user_profile(candidate)
+            score = cls._calculate_similarity(user_profile, candidate_profile)
+            matches.append({
+                "user_id": candidate.id,
+                "name": candidate.display_name,
+                "score": score
+            })
+
+            matches.sort(key=lambda x: x['score'], reverse=True)
+            return matches[:limit]
+    
+    @staticmethod
+    def _build_user_profile(user: User) -> UserProfile:
+        return UserProfile(
+            id=user.id,
+            name=user.display_name,
+            interests=user.interests.split(",") if isinstance(user.interests, str) else user.interests,
+            bio=user.bio or ""  
+        )
+    
+    @staticmethod
+    def _calculate_similarity(user_a: UserProfile, user_b: UserProfile) -> float:
+        interests_a = set(i.lower().strip() for i in user_a.interests)
+        interests_b = set(i.lower().strip() for i in user_b.interests)
+
+        common_interests = len(set(interests_a) & set(interests_b))
+        total_interests = len(set(interests_a) | set(interests_b))
+        interest_score = common_interests / total_interests if total_interests > 0 else 0
+
+        # Use Gemini to analyze compatbility (fall back safely if not configured)
+        ai_score = 0.0
+        if model is not None:
+            try:
+                prompt = f"""
+                Analyze the compatibility between two users based on their interests, bios, and overall profiles:
+                
+                User A:
+                - Interests: {', '.join(interests_a)}
+                - Bio: {user_a.bio}
+                
+                User B:
+                - Interests: {', '.join(interests_b)}
+                - Bio: {user_b.bio}
+                
+                Rate their compatibility on a scale of 0 to 1, where 1 is highest compatibility.
+                Consider factors like:
+                - Interest overlap and complementarity
+                - Common themes and values expressed in their bios
+                - Writing style and personality similarities in bios
+                - Potential for meaningful interaction based on both interests and bio content
+                - Shared experiences or backgrounds implied in their bios
+                - Overall profile harmony
+                
+                Return only the numeric score between 0 and 1.
+                """
+
+                response = model.generate_content(prompt)
+                # response shape varies between client versions; try common fields
+                text = ""
+                if hasattr(response, "text") and response.text:
+                    text = response.text
+                elif hasattr(response, "candidates") and response.candidates:
+                    first = response.candidates[0]
+                    if hasattr(first, "content"):
+                        text = first.content
+                    elif isinstance(first, dict) and "content" in first:
+                        text = first["content"]
+
+                if text:
+                    try:
+                        ai_score = float(text.strip())
+                    except Exception:
+                        ai_score = 0.0
+            except Exception:
+                ai_score = 0.0
+
+        final_score = (interest_score + ai_score) / 2
+        return min(max(final_score, 0), 1)
+
