@@ -78,6 +78,8 @@ export interface EventRecord {
   imageUrl?: string | null;
   lat?: number | null;
   lng?: number | null;
+  interest_count?: number;
+  viewer_interest?: boolean;
 }
 
 export interface EventNlpResponse {
@@ -109,11 +111,12 @@ export const aiApi = {
       },
     }),
 
-  searchEvents: (query: string, refresh = false) =>
+  searchEvents: (query: string, viewerId?: string, refresh = false) =>
     api.get<EventNlpResponse>('/events/nlp-search', {
       params: {
         q: query,
         ...(refresh ? { refresh: true } : {}),
+        ...(viewerId ? { viewer_id: viewerId } : {}),
       },
     }),
 };
