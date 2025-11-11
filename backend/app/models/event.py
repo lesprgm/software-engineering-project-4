@@ -28,3 +28,4 @@ class Event(Base):
 
 
 Index("idx_events_time", Event.start_time, Event.end_time)
+

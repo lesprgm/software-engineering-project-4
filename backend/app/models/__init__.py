@@ -8,8 +8,8 @@ from .user import User
 __all__ = [
     "AICacheEntry",
     "Availability",
-    "Event",
-    "EventInterest",
+	"Event",
+	"EventInterest",
     "Group",
     "GroupMeeting",
     "GroupMembership",

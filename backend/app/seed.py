@@ -1,7 +1,10 @@
 from pathlib import Path
 import sys
 
+from datetime import datetime, timedelta, timezone
+
 from app.database import SessionLocal
+from app.models.event import Event
 from app.models.places import Place
 
 
@@ -130,6 +133,106 @@ places_data = [
         "latitude": 40.8155,
         "longitude": -81.9297,
     },
+    {
+        "name": "The Rail - Downtown Wooster",
+        "description": "Ohio-raised burgers, hand-cut fries, and milkshakes in a lively downtown space.",
+        "location": "143 E Liberty St, Wooster, OH",
+        "rating": 4.6,
+        "tags": "restaurant, burgers, local, casual",
+        "photo_url": "https://images.unsplash.com/photo-1550547660-d9450f859349",
+        "latitude": 40.7992,
+        "longitude": -81.9370,
+    },
+    {
+        "name": "Local Roots Café & Market",
+        "description": "Farm-to-table soups, sandwiches, and bakery items sourced from Wayne County growers.",
+        "location": "140 S Walnut St, Wooster, OH",
+        "rating": 4.7,
+        "tags": "restaurant, farm-to-table, vegetarian, lunch",
+        "photo_url": "https://images.unsplash.com/photo-1447078806655-40579c2520d6",
+        "latitude": 40.7981,
+        "longitude": -81.9379,
+    },
+    {
+        "name": "The Wooster Inn Restaurant",
+        "description": "Historic inn dining room with seasonal entrees and a patio overlooking campus.",
+        "location": "801 E Wayne Ave, Wooster, OH",
+        "rating": 4.4,
+        "tags": "restaurant, fine-dining, patio, date-night",
+        "photo_url": "https://images.unsplash.com/photo-1528605248644-14dd04022da1",
+        "latitude": 40.8112,
+        "longitude": -81.9179,
+    },
+    {
+        "name": "The Leaf Restaurant & Bar",
+        "description": "Upscale yet cozy dining inside Buehler’s with shareable plates and cocktails.",
+        "location": "3540 Burbank Rd, Wooster, OH",
+        "rating": 4.5,
+        "tags": "restaurant, cocktails, upscale, dinner",
+        "photo_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+        "latitude": 40.8412,
+        "longitude": -81.9532,
+    },
+    {
+        "name": "Matsos Family Restaurant",
+        "description": "Classic Greek-American comfort food, famous for pizza and baklava.",
+        "location": "154 W Liberty St, Wooster, OH",
+        "rating": 4.3,
+        "tags": "restaurant, greek, pizza, family-owned",
+        "photo_url": "https://images.unsplash.com/photo-1504754524776-8f4f37790ca0",
+        "latitude": 40.7984,
+        "longitude": -81.9397,
+    },
+    {
+        "name": "Don Pancho’s Tex Mex Café",
+        "description": "Colorful cantina with sizzling fajitas, tacos, and margaritas near campus housing.",
+        "location": "2105 Lincoln Way E, Wooster, OH",
+        "rating": 4.2,
+        "tags": "restaurant, tex-mex, casual, group",
+        "photo_url": "https://images.unsplash.com/photo-1608039829574-9b864f06c4a0",
+        "latitude": 40.8073,
+        "longitude": -81.9028,
+    },
+    {
+        "name": "Chipotle Mexican Grill (Wooster Commons)",
+        "description": "Popular fast-casual burrito spot for quick study-break meals.",
+        "location": "3989 Burbank Rd, Wooster, OH",
+        "rating": 4.1,
+        "tags": "restaurant, mexican, fast-casual, takeout",
+        "photo_url": "https://images.unsplash.com/photo-1608039829574-9b864f06c4a0",
+        "latitude": 40.8536,
+        "longitude": -81.9494,
+    },
+    {
+        "name": "Panera Bread (Wooster)",
+        "description": "Soups, salads, and study-friendly booths with reliable Wi-Fi.",
+        "location": "3939 Burbank Rd, Wooster, OH",
+        "rating": 4.0,
+        "tags": "restaurant, cafe, bakery, study-spot",
+        "photo_url": "https://images.unsplash.com/photo-1498654200943-1088dd4438ae",
+        "latitude": 40.8524,
+        "longitude": -81.9506,
+    },
+    {
+        "name": "Buffalo Wild Wings (Wooster)",
+        "description": "Game-day wings, trivia nights, and plenty of big screens for watch parties.",
+        "location": "4127 Burbank Rd, Wooster, OH",
+        "rating": 4.1,
+        "tags": "restaurant, wings, sports, late-night",
+        "photo_url": "https://images.unsplash.com/photo-1504674900247-0877df9cc836",
+        "latitude": 40.8568,
+        "longitude": -81.9522,
+    },
+    {
+        "name": "LongHorn Steakhouse (Wooster)",
+        "description": "Steaks, salads, and hearty sides—popular for celebratory dinners.",
+        "location": "3820 Burbank Rd, Wooster, OH",
+        "rating": 4.3,
+        "tags": "restaurant, steakhouse, dinner, group",
+        "photo_url": "https://images.unsplash.com/photo-1544025162-d76694265947",
+        "latitude": 40.8476,
+        "longitude": -81.9511,
+    },
 ]
 
 added = 0
@@ -139,7 +242,62 @@ for data in places_data:
         db.add(Place(**data))
         added += 1
 
+now = datetime.now(timezone.utc)
+event_payloads = [
+    {
+        "title": "Campus Farmers Market",
+        "description": "Local produce, live acoustic music, and student art pop-ups.",
+        "location": "Lowry Center Patio",
+        "category": "community",
+        "start_time": now + timedelta(days=2, hours=11),
+        "end_time": now + timedelta(days=2, hours=14),
+        "tags": ["food", "outdoors", "community"],
+    },
+    {
+        "title": "Open Mic @ The Alley",
+        "description": "Share poetry, quick stand-up, or acoustic covers.",
+        "location": "The Alley, College of Wooster",
+        "category": "music",
+        "start_time": now + timedelta(days=3, hours=19),
+        "end_time": now + timedelta(days=3, hours=21),
+        "tags": ["music", "nightlife"],
+    },
+    {
+        "title": "Sunday Sunrise Yoga",
+        "description": "Guided yoga session on the quad. Mats provided on request.",
+        "location": "Campus Quad",
+        "category": "wellness",
+        "start_time": now + timedelta(days=4, hours=8),
+        "end_time": now + timedelta(days=4, hours=9),
+        "tags": ["wellness", "outdoors"],
+    },
+    {
+        "title": "Resume + LinkedIn Workshop",
+        "description": "Career Services hosts a drop-in resume and LinkedIn review.",
+        "location": "Apex Learning Commons",
+        "category": "career",
+        "start_time": now + timedelta(days=1, hours=15),
+        "end_time": now + timedelta(days=1, hours=16, minutes=30),
+        "tags": ["career", "academic"],
+    },
+]
+
+for payload in event_payloads:
+    exists = db.query(Event).filter(Event.title == payload["title"]).first()
+    if exists:
+        continue
+    event = Event(
+        title=payload["title"],
+        description=payload["description"],
+        location=payload["location"],
+        category=payload["category"],
+        start_time=payload["start_time"],
+        end_time=payload["end_time"],
+        tags=",".join(payload["tags"]),
+    )
+    db.add(event)
+
 db.commit()
 db.close()
 
-print(f"✅ Seed data added successfully! ({added} new records)")
+print(f"✅ Seed data added successfully! ({added} new places)")

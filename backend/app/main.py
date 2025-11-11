@@ -47,7 +47,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(groups.router)
 app.include_router(places.router)
 app.include_router(ai.router)
-app.include_router(events.router, prefix="/api")
+app.include_router(events.router)
 app.include_router(matches.router)
 
 
