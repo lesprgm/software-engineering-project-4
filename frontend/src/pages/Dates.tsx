@@ -1,18 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import api from '../lib/api';
 import Modal from '../components/ui/Modal';
-import { useToast } from '../components/ToastProvider';
-import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/ui/Avatar';
+import { useToast } from '../components/ToastProvider';
 import { useAuthStore, User as AuthUser } from '../store/auth';
 import { aiApi, DateIdeaRequest, DateIdeasResponse, ParticipantProfile } from '../services/ai';
+import { useUserMatches } from '../hooks/useGroups';
 
-type DateEvent = { id: string; partnerName: string; when: string; location?: string; status: 'proposed' | 'confirmed' };
 type Match = { id: string; name: string; avatarUrl?: string; sharedInterests?: string[] };
 type Plan = { partnerName: string; when: string; location: string; idea: string };
+type SavedPlan = Plan & { id: string };
 type PlanOption = Plan & { reasons?: string[] };
 type PlanOptions = {
   partnerName: string;
@@ -21,7 +21,6 @@ type PlanOptions = {
   generatedAt?: string;
   cached?: boolean;
 };
-type InboxProposal = { id: string; partnerName: string; when: string; location: string; idea: string };
 
 export default function Dates() {
   const [openOptions, setOpenOptions] = useState<PlanOptions | null>(null);
@@ -30,25 +29,20 @@ export default function Dates() {
   const [customWhen, setCustomWhen] = useState('');
   const [customLocation, setCustomLocation] = useState('');
   const [customIdea, setCustomIdea] = useState('');
+
   const { notify } = useToast();
-  const qc = useQueryClient();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
 
-  const matchesQ = useQuery({
-    queryKey: ['date-matches'],
-    queryFn: async () => (await api.get('/dates/matches')).data as Match[],
-  });
-
-  const upcomingQ = useQuery({
-    queryKey: ['dates-upcoming'],
-    queryFn: async () => (await api.get('/dates/upcoming')).data as DateEvent[],
-  });
-
-  const inboxQ = useQuery({
-    queryKey: ['dates-inbox'],
-    queryFn: async () => (await api.get('/dates/inbox')).data as InboxProposal[],
-  });
+  const { data: matchCandidates, isLoading: matchesLoading } = useUserMatches(currentUser?.id);
+  const matches = useMemo<Match[]>(() => {
+    if (!matchCandidates) return [];
+    return matchCandidates.map((candidate) => ({
+      id: candidate.user_id,
+      name: candidate.display_name,
+      sharedInterests: candidate.shared_interests,
+    }));
+  }, [matchCandidates]);
 
   const optionsMut = useMutation({
     mutationFn: async (match: Match) => {
@@ -64,136 +58,103 @@ export default function Dates() {
     onError: () => notify('Could not generate ideas right now. Try again later.', 'error'),
   });
 
-  const proposeMut = useMutation({
-    mutationFn: async (payload: { matchId: string; plan: Plan }) => (await api.post('/dates/propose', payload)).data,
-    onSuccess: async () => {
-      setOpenOptions(null);
-      notify('Proposal sent', 'success');
-      await qc.invalidateQueries({ queryKey: ['dates-upcoming'] });
-    },
-  });
+  const [savedPlans, setSavedPlans] = useState<SavedPlan[]>([]);
 
-  const [accepting, setAccepting] = useState<InboxProposal | null>(null);
-  const [acceptWhen, setAcceptWhen] = useState('');
-  const acceptMut = useMutation({
-    mutationFn: async (payload: { proposalId: string; when: string }) => (await api.post('/dates/accept', payload)).data,
-    onSuccess: async () => {
-      setAccepting(null);
-      notify('Date confirmed', 'success');
-      await qc.invalidateQueries({ queryKey: ['dates-inbox'] });
-      await qc.invalidateQueries({ queryKey: ['dates-upcoming'] });
-    },
-  });
+  const handlePlanSelection = (plan: Plan) => {
+    const saved: SavedPlan = { ...plan, id: `${plan.partnerName}-${Date.now()}` };
+    setSavedPlans((prev) => [saved, ...prev]);
+    notify(`Plan saved! Share it with ${plan.partnerName} to confirm.`, 'success');
+    setOpenOptions(null);
+    setSelectedIdx(null);
+    setCustomOpen(false);
+    setCustomIdea('');
+    setCustomLocation('');
+    setCustomWhen('');
+  };
+
+  const handleRemovePlan = (id: string) => {
+    setSavedPlans((prev) => prev.filter((plan) => plan.id !== id));
+    notify('Plan removed.', 'success');
+  };
 
   return (
-    <div className="grid lg:grid-cols-3 gap-6">
-      <Card className="lg:col-span-2 p-6">
+    <div className="space-y-6">
+      <Card className="p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Your matches</h2>
+          <Button variant="secondary" onClick={() => navigate('/matches')}>Visit matches</Button>
         </div>
-        {matchesQ.isLoading && <div>Loading matches…</div>}
+        {matchesLoading && <div>Loading matches…</div>}
         <div className="grid sm:grid-cols-2 gap-4">
-          {matchesQ.data?.map((m) => (
-            <div key={m.id} className="flex items-center gap-4 p-2 sm:p-3 bg-transparent">
-              <Avatar src={m.avatarUrl || ''} className="w-14 h-14 rounded-full object-cover" />
+          {matches.map((match) => (
+            <div key={match.id} className="flex items-center gap-4 p-2 sm:p-3">
+              <Avatar src={match.avatarUrl || ''} className="w-14 h-14 rounded-full object-cover" />
               <div className="min-w-0 flex-1">
-                <div className="font-medium truncate">{m.name}</div>
-                {!!m.sharedInterests?.length && (
+                <div className="font-medium truncate">{match.name}</div>
+                {!!match.sharedInterests?.length && (
                   <div className="mt-1 flex flex-wrap gap-1.5">
-                    {m.sharedInterests.slice(0, 4).map((s) => (
-                      <span key={s} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {s}
+                    {match.sharedInterests.slice(0, 4).map((interest) => (
+                      <span key={interest} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {interest}
                       </span>
                     ))}
                   </div>
                 )}
               </div>
-              <Button onClick={() => optionsMut.mutate(m)} loading={optionsMut.isPending} aria-label={`Get date options with ${m.name}`}>
-                See date options
+              <Button onClick={() => optionsMut.mutate(match)} loading={optionsMut.isPending}>
+                See date ideas
               </Button>
             </div>
           ))}
         </div>
-      </Card>
-
-      <Card className="p-6">
-        <div className="text-lg font-semibold mb-3">Upcoming dates</div>
-        {upcomingQ.isLoading && <div>Loading…</div>}
-        {!upcomingQ.data?.length && !upcomingQ.isLoading && (
-          <div className="text-sm text-gray-600">No dates scheduled yet.</div>
+        {!matches.length && !matchesLoading && (
+          <div className="text-center text-gray-500 mt-6">No matches yet. Find someone in the Matches tab!</div>
         )}
-        <div className="space-y-3">
-          {upcomingQ.data?.map((ev) => (
-            <div key={ev.id} className="p-2 sm:p-3 bg-transparent">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-medium">{ev.partnerName}</div>
-                  <div className="text-sm text-gray-600">{new Date(ev.when).toLocaleString()} {ev.location ? `• ${ev.location}` : ''}</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {ev.status === 'proposed' ? (
-                    <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800">Awaiting response</span>
-                  ) : (
-                    <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">Confirmed</span>
-                  )}
-                  <Button variant="secondary" onClick={() => navigate(`/messages?with=${encodeURIComponent(ev.partnerName)}`)}>Message</Button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </Card>
 
-      <Card className="lg:col-span-3 p-6">
-        <div className="text-lg font-semibold mb-3">Proposals for you</div>
-        {inboxQ.isLoading && <div>Loading…</div>}
-        {!inboxQ.data?.length && !inboxQ.isLoading && (
-          <div className="text-sm text-gray-600">No new proposals right now.</div>
-        )}
-        <div className="space-y-3">
-          {inboxQ.data?.map((p) => (
-            <div key={p.id} className="p-3 bg-transparent">
-              <div className="text-sm text-gray-700">
-                <div className="mb-1 font-medium">Based on your interests, here’s a plan with {p.partnerName}:</div>
-                <div><span className="font-medium">When:</span> {new Date(p.when).toLocaleString()}</div>
-                <div><span className="font-medium">Where:</span> {p.location}</div>
-                <p className="mt-1">{p.idea}</p>
+      {savedPlans.length > 0 && (
+        <Card className="p-6">
+          <div className="text-lg font-semibold mb-3">Saved plans</div>
+          <div className="space-y-4">
+            {savedPlans.map((plan) => (
+              <div key={plan.id} className="rounded-lg border border-gray-200 p-3">
+                <div className="font-medium text-gray-800">{plan.partnerName}</div>
+                <div className="text-sm text-gray-600">{new Date(plan.when).toLocaleString()}</div>
+                <div className="text-sm text-gray-600 mb-2">{plan.location}</div>
+                <p className="text-sm text-gray-700">{plan.idea}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => navigate(`/messages?with=${encodeURIComponent(plan.partnerName)}`)}
+                    variant="primary"
+                  >
+                    Message
+                  </Button>
+                  <Button variant="secondary" onClick={() => handleRemovePlan(plan.id)}>
+                    Remove
+                  </Button>
+                </div>
               </div>
-              <div className="mt-3 flex gap-2">
-                <Button onClick={() => { setAccepting(p); setAcceptWhen(p.when.substring(0,16)); }}>Accept</Button>
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setOpenOptions({
-                      partnerName: p.partnerName,
-                      matchId: p.id,
-                      options: [{ partnerName: p.partnerName, when: p.when, location: p.location, idea: p.idea }],
-                    });
-                    setSelectedIdx(0);
-                    setCustomOpen(true);
-                  }}
-                >
-                  Suggest something else
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+            ))}
+          </div>
+        </Card>
+      )}
 
-      <Modal open={!!openOptions} onClose={() => setOpenOptions(null)} title={openOptions ? `Pick a plan with ${openOptions.partnerName}` : ''}>
+      <Modal open={!!openOptions} onClose={() => setOpenOptions(null)} title={openOptions ? `Ideas with ${openOptions.partnerName}` : ''}>
         {openOptions && (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">Based on your shared interests, here are a couple of ideas to choose from. Pick one or suggest your own.</p>
+            <p className="text-sm text-gray-600">
+              Based on your shared interests, here are a few ideas. Save one, or customize your own.
+            </p>
             {openOptions.generatedAt && (
               <p className="text-xs text-gray-500">
-                Ideas generated {new Date(openOptions.generatedAt).toLocaleString()}
+                Generated {new Date(openOptions.generatedAt).toLocaleString()}
                 {openOptions.cached ? ' (cached)' : ''}
               </p>
             )}
+
             <div className="grid md:grid-cols-2 gap-3">
-              {openOptions.options.map((opt, idx) => (
-                <label key={idx} className={`block rounded-xl p-3 cursor-pointer transition-shadow ${selectedIdx === idx ? 'ring-2 ring-rose-600' : ''}`}>
+              {openOptions.options.map((option, idx) => (
+                <label key={idx} className={`block rounded-xl p-3 cursor-pointer transition-shadow ${selectedIdx === idx ? 'ring-2 ring-blue-600' : ''}`}>
                   <input
                     type="radio"
                     name="plan"
@@ -202,20 +163,16 @@ export default function Dates() {
                     onChange={() => setSelectedIdx(idx)}
                   />
                   <div className="text-sm text-gray-700">
-                    <div><span className="font-medium">When:</span> {new Date(opt.when).toLocaleString()}</div>
-                    <div><span className="font-medium">Where:</span> {opt.location}</div>
-                    <p className="mt-1 text-gray-700">{opt.idea}</p>
-                    {!!opt.reasons?.length && (
+                    <div><span className="font-medium">When:</span> {new Date(option.when).toLocaleString()}</div>
+                    <div><span className="font-medium">Where:</span> {option.location}</div>
+                    <p className="mt-1 text-gray-700">{option.idea}</p>
+                    {!!option.reasons?.length && (
                       <div className="mt-2 text-xs text-gray-600">
                         <span className="mr-2 text-gray-500">Why this plan:</span>
                         <span className="inline-flex flex-wrap gap-1 align-middle">
-                          {opt.reasons.map((r, i) => (
-                            <span
-                              key={`${r}-${i}`}
-                              className="inline-flex items-center rounded-full border border-gray-300 bg-white/80 px-2 py-0.5 text-[11px] text-gray-700"
-                              aria-label={`reason ${r}`}
-                            >
-                              {r}
+                          {option.reasons.map((reason, reasonIdx) => (
+                            <span key={`${reason}-${reasonIdx}`} className="inline-flex items-center rounded-full border border-gray-300 bg-white/80 px-2 py-0.5 text-[11px] text-gray-700">
+                              {reason}
                             </span>
                           ))}
                         </span>
@@ -228,18 +185,12 @@ export default function Dates() {
 
             <div className="flex items-center gap-2">
               <Button
-                onClick={() => {
-                  if (selectedIdx === null) return;
-                  const plan = openOptions.options[selectedIdx];
-                  const matchId = openOptions.matchId || matchesQ.data?.[0]?.id || 'match';
-                  proposeMut.mutate({ matchId, plan });
-                }}
+                onClick={() => selectedIdx !== null && handlePlanSelection(openOptions.options[selectedIdx])}
                 disabled={selectedIdx === null}
-                loading={proposeMut.isPending}
               >
-                Send proposal
+                Save plan
               </Button>
-              <Button variant="secondary" onClick={() => setCustomOpen((v) => !v)}>
+              <Button variant="secondary" onClick={() => setCustomOpen((value) => !value)}>
                 Suggest something else
               </Button>
             </div>
@@ -249,48 +200,52 @@ export default function Dates() {
                 <div className="grid md:grid-cols-2 gap-2">
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-700">When</span>
-                    <input type="datetime-local" value={customWhen} onChange={(e) => setCustomWhen(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                    <input
+                      type="datetime-local"
+                      value={customWhen}
+                      onChange={(event) => setCustomWhen(event.target.value)}
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    />
                   </label>
                   <label className="text-sm">
                     <span className="mb-1 block text-gray-700">Where</span>
-                    <input type="text" value={customLocation} onChange={(e) => setCustomLocation(e.target.value)} placeholder="Location" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                    <input
+                      type="text"
+                      value={customLocation}
+                      onChange={(event) => setCustomLocation(event.target.value)}
+                      placeholder="Location"
+                      className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    />
                   </label>
                 </div>
                 <label className="text-sm block">
                   <span className="mb-1 block text-gray-700">Plan details</span>
-                  <textarea rows={3} value={customIdea} onChange={(e) => setCustomIdea(e.target.value)} placeholder="What should we do?" className="w-full rounded-md border border-gray-300 px-3 py-2" />
+                  <textarea
+                    rows={3}
+                    value={customIdea}
+                    onChange={(event) => setCustomIdea(event.target.value)}
+                    placeholder="What should we do?"
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                  />
                 </label>
                 <div>
                   <Button
                     onClick={() => {
                       if (!customWhen || !customLocation) return;
-                      const p: Plan = { partnerName: openOptions.partnerName, when: new Date(customWhen).toISOString(), location: customLocation, idea: customIdea || 'Fun hangout' };
-                      const matchId = openOptions.matchId || matchesQ.data?.[0]?.id || 'match';
-                      proposeMut.mutate({ matchId, plan: p });
+                      const plan: Plan = {
+                        partnerName: openOptions.partnerName,
+                        when: new Date(customWhen).toISOString(),
+                        location: customLocation,
+                        idea: customIdea || 'Fun hangout',
+                      };
+                      handlePlanSelection(plan);
                     }}
-                    loading={proposeMut.isPending}
                   >
-                    Send custom proposal
+                    Save custom proposal
                   </Button>
                 </div>
               </div>
             )}
-          </div>
-        )}
-      </Modal>
-
-      <Modal open={!!accepting} onClose={() => setAccepting(null)} title={accepting ? `Confirm date with ${accepting.partnerName}` : ''}>
-        {accepting && (
-          <div className="space-y-3 text-sm">
-            <div className="text-gray-700">Confirm the time or adjust it before accepting.</div>
-            <label className="text-sm block">
-              <span className="mb-1 block text-gray-700">Date & time</span>
-              <input type="datetime-local" value={acceptWhen} onChange={(e) => setAcceptWhen(e.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-            </label>
-            <div className="flex gap-2">
-              <Button onClick={() => acceptMut.mutate({ proposalId: accepting.id, when: new Date(acceptWhen || accepting.when).toISOString() })} loading={acceptMut.isPending}>Accept</Button>
-              <Button variant="secondary" onClick={() => setAccepting(null)}>Cancel</Button>
-            </div>
           </div>
         )}
       </Modal>

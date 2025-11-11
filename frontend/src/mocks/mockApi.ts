@@ -22,8 +22,18 @@ const db = {
     { id: 'e4', title: 'Ladies Night', date: new Date(Date.now() + 4*86400000).toISOString(), location: 'Downtown Venue', tags: ['nightlife'], imageUrl: `${import.meta.env.BASE_URL || '/'}events/ladies-night.jpg`, description: 'Special deals and music all night.' },
   ] as Event[],
   places: [
-    { id: 'p1', name: 'Campus Cafe', rating: 4.3, review_count: 12, tags: ['coffee', 'quiet'], description: 'Cozy for study dates.', latitude: 37.8715, longitude: -122.273, location: 'Student Center' },
-    { id: 'p2', name: 'Quad Lawn', rating: 4.7, review_count: 5, tags: ['outdoors'], description: 'Great for picnics and frisbee.', latitude: 37.8719, longitude: -122.268, location: 'Main Quad' },
+    { id: 'p1', name: 'Campus Cafe', rating: 4.3, review_count: 12, tags: ['coffee', 'quiet'], description: 'Cozy for study dates.', latitude: 37.8715, longitude: -122.2730, location: 'Student Center' },
+    { id: 'p2', name: 'Quad Lawn', rating: 4.7, review_count: 5, tags: ['outdoors'], description: 'Great for picnics and frisbee.', latitude: 37.8719, longitude: -122.2680, location: 'Main Quad' },
+    { id: 'p3', name: 'Broken Rocks Cafe & Bakery', rating: 4.6, review_count: 210, tags: ['restaurant', 'cafe', 'date-night'], description: 'Artisan breads and cozy brunch plates.', latitude: 40.7989, longitude: -81.9376, location: '123 E Liberty St, Wooster' },
+    { id: 'p4', name: 'City Square Steakhouse', rating: 4.7, review_count: 180, tags: ['restaurant', 'steakhouse', 'upscale'], description: 'Favorite for celebratory dinners.', latitude: 40.7976, longitude: -81.9381, location: '148 S Market St, Wooster' },
+    { id: 'p5', name: 'Spoon Market & Deli', rating: 4.5, review_count: 160, tags: ['restaurant', 'deli', 'lunch'], description: 'Creative sandwiches and deli bites.', latitude: 40.7983, longitude: -81.9403, location: '144 W Liberty St, Wooster' },
+    { id: 'p6', name: 'Basil Asian Bistro', rating: 4.4, review_count: 140, tags: ['restaurant', 'sushi', 'asian'], description: 'Pan-Asian menu perfect for night out.', latitude: 40.7982, longitude: -81.9401, location: '145 W Liberty St, Wooster' },
+    { id: 'p7', name: 'Olde Jaol Steakhouse & Tavern', rating: 4.4, review_count: 120, tags: ['restaurant', 'historic', 'steakhouse'], description: 'Dinner inside a renovated jailhouse.', latitude: 40.8004, longitude: -81.9374, location: '215 N Walnut St, Wooster' },
+    { id: 'p8', name: 'El Campesino', rating: 4.3, review_count: 150, tags: ['restaurant', 'mexican', 'casual'], description: 'Colorful plates, perfect for groups.', latitude: 40.8370, longitude: -81.9415, location: '44 E Milltown Rd, Wooster' },
+    { id: 'p9', name: "TJ's Restaurant", rating: 4.2, review_count: 100, tags: ['diner', 'breakfast', 'comfort'], description: 'Classic diner breakfast and coffee refills.', latitude: 40.7709, longitude: -81.9352, location: '3124 Dover Rd, Wooster' },
+    { id: 'p10', name: "Omahoma Bob's Barbeque", rating: 4.6, review_count: 130, tags: ['bbq', 'casual', 'takeout'], description: 'Slow-smoked meats for picnic vibes.', latitude: 40.7986, longitude: -81.9365, location: '75 E Liberty St, Wooster' },
+    { id: 'p11', name: 'Tulipan Hungarian Pastry & Cafe', rating: 4.8, review_count: 90, tags: ['cafe', 'dessert', 'cozy'], description: 'Pastries and espresso in a European cafe.', latitude: 40.7988, longitude: -81.9374, location: '122 E Liberty St, Wooster' },
+    { id: 'p12', name: 'Coccia House Pizza', rating: 4.5, review_count: 220, tags: ['pizza', 'shareable', 'casual'], description: 'Legendary thick-crust pizza with tons of toppings.', latitude: 40.8155, longitude: -81.9297, location: '764 Pittsburg Ave, Wooster' },
   ] as Place[],
   suggestions: [
     // One-to-one fake profiles
@@ -111,6 +121,19 @@ export function setupMockApi() {
   });
   mock.onPost(/\/matches\/[^/]+\/accept$/).reply(200, { ok: true });
   mock.onPost(/\/matches\/[^/]+\/skip$/).reply(200, { ok: true });
+  mock.onGet(/\/matches\/users\/([^/]+)$/).reply(() => {
+    const candidates = db.suggestions
+      .filter((s) => s.type === 'user')
+      .map((s, idx) => ({
+        user_id: s.id,
+        display_name: s.name,
+        compatibility_score: Math.max(0.95 - idx * 0.05, 0.1),
+        shared_interests: s.interests || [],
+        schedule_score: 0.5,
+        personality_overlap: 0.4,
+      }));
+    return [200, { candidates }];
+  });
 
   mock.onGet(/\/matches\/([^/]+)\/insight$/).reply((config) => {
     const match = config.url?.match(/\/matches\/([^/]+)\/insight$/);

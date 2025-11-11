@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { groupsApi, GroupCreate, JoinGroupRequest, GroupMessageCreate, AvailabilityCreate, MeetingPreferences, MeetingConfirmationRequest } from '../services/groups';
+import { matchesService } from '../services/matches';
 
 // Query keys
 export const groupKeys = {
@@ -11,6 +12,7 @@ export const groupKeys = {
   messages: (id: string) => [...groupKeys.all, 'messages', id] as const,
   availability: (id: string) => [...groupKeys.all, 'availability', id] as const,
   matches: (id: string) => [...groupKeys.all, 'matches', id] as const,
+  userMatches: (userId: string) => [...groupKeys.all, 'user-matches', userId] as const,
 };
 
 // List all groups
@@ -144,5 +146,16 @@ export function useGroupMatches(groupId: string) {
       return response.data;
     },
     enabled: !!groupId,
+  });
+}
+
+export function useUserMatches(userId?: string) {
+  return useQuery({
+    queryKey: userId ? groupKeys.userMatches(userId) : ['user-matches', 'anonymous'],
+    enabled: !!userId,
+    queryFn: async () => {
+      const response = await matchesService.getUserMatches(userId!);
+      return response.data.candidates;
+    },
   });
 }
