@@ -22,8 +22,8 @@ const db = {
     { id: 'e4', title: 'Ladies Night', date: new Date(Date.now() + 4*86400000).toISOString(), location: 'Downtown Venue', tags: ['nightlife'], imageUrl: `${import.meta.env.BASE_URL || '/'}events/ladies-night.jpg`, description: 'Special deals and music all night.' },
   ] as Event[],
   places: [
-    { id: 'p1', name: 'Campus Cafe', rating: 4.3, tags: ['coffee', 'quiet'], description: 'Cozy for study dates.' },
-    { id: 'p2', name: 'Quad Lawn', rating: 4.7, tags: ['outdoors'], description: 'Great for picnics and frisbee.' },
+    { id: 'p1', name: 'Campus Cafe', rating: 4.3, review_count: 12, tags: ['coffee', 'quiet'], description: 'Cozy for study dates.', latitude: 37.8715, longitude: -122.273, location: 'Student Center' },
+    { id: 'p2', name: 'Quad Lawn', rating: 4.7, review_count: 5, tags: ['outdoors'], description: 'Great for picnics and frisbee.', latitude: 37.8719, longitude: -122.268, location: 'Main Quad' },
   ] as Place[],
   suggestions: [
     // One-to-one fake profiles
@@ -59,6 +59,14 @@ const db = {
   inbox: [
     { id: 'p1', partnerName: 'Riley', when: new Date(Date.now() + 36 * 3600 * 1000).toISOString(), location: 'Student Center', idea: 'Meet for boba then a walk across the quad.' },
   ] as { id: string; partnerName: string; when: string; location: string; idea: string }[],
+};
+
+const aiCache = {
+  insights: new Map<string, { summary_text: string; generated_at: string }>(),
+  ideas: new Map<
+    string,
+    { generated_at: string; ideas: { id: number; match_id: string; title: string; description: string; location?: string | null; idea_rank: number; expires_at: string; generated_at: string }[] }
+  >(),
 };
 
 export function setupMockApi() {
@@ -104,6 +112,51 @@ export function setupMockApi() {
   mock.onPost(/\/matches\/[^/]+\/accept$/).reply(200, { ok: true });
   mock.onPost(/\/matches\/[^/]+\/skip$/).reply(200, { ok: true });
 
+  mock.onGet(/\/matches\/([^/]+)\/insight$/).reply((config) => {
+    const match = config.url?.match(/\/matches\/([^/]+)\/insight$/);
+    const matchId = match ? match[1] : '';
+    const cached = matchId ? aiCache.insights.get(matchId) : null;
+    if (!cached) {
+      return [404, { detail: 'No insight cached' }];
+    }
+    return [
+      200,
+      {
+        match_id: matchId,
+        summary_text: cached.summary_text,
+        generated_at: cached.generated_at,
+        cached: true,
+        moderation_applied: false,
+      },
+    ];
+  });
+
+  mock.onPost(/\/matches\/([^/]+)\/insight$/).reply((config) => {
+    try {
+      const match = config.url?.match(/\/matches\/([^/]+)\/insight$/);
+      const matchId = match ? match[1] : `match-${Date.now()}`;
+      const body = JSON.parse(config.data || '{}');
+      const shared = Array.isArray(body.shared_interests) && body.shared_interests.length
+        ? body.shared_interests.join(', ')
+        : 'campus vibes';
+      const summary = `You both connect over ${shared}. Plan something near ${body.location || 'campus'}.`;
+      const payload = { summary_text: summary, generated_at: new Date().toISOString() };
+      aiCache.insights.set(matchId, payload);
+      return [
+        200,
+        {
+          match_id: matchId,
+          summary_text: summary,
+          generated_at: payload.generated_at,
+          cached: false,
+          moderation_applied: false,
+        },
+      ];
+    } catch {
+      return [400, { detail: 'Unable to craft insight' }];
+    }
+  });
+
   // Events
   mock.onGet('/events').reply((config) => {
     const url = new URL(config.baseURL?.startsWith('http') ? config.baseURL : 'http://x');
@@ -112,9 +165,52 @@ export function setupMockApi() {
     return [200, items];
   });
   mock.onPost(/\/events\/[^/]+\/rsvp$/).reply(200, { ok: true });
+  mock.onGet('/events/nlp-search').reply((config) => {
+    const qp = new URLSearchParams((config.params as any) || config.url?.split('?')[1] || '');
+    const query = qp.get('q') || '';
+    const lowered = query.toLowerCase();
+    const filtered = db.events.filter((e) =>
+      !query ||
+      e.title.toLowerCase().includes(lowered) ||
+      e.location.toLowerCase().includes(lowered) ||
+      (e.tags || []).some((t) => t.toLowerCase().includes(lowered))
+    );
+    const mapped = filtered.map((e) => ({
+      id: e.id,
+      title: e.title,
+      description: e.description,
+      location: e.location,
+      category: (e.tags && e.tags[0]) || 'social',
+      start_time: e.date,
+      end_time: new Date(new Date(e.date).getTime() + 3600000).toISOString(),
+      tags: e.tags,
+      lat: e.lat,
+      lng: e.lng,
+    }));
+    return [
+      200,
+      {
+        query,
+        filters: {
+          location: query || null,
+          category: mapped[0]?.category || null,
+          keywords: query ? [query.toLowerCase()] : [],
+        },
+        events: mapped,
+        cached: false,
+        interpreted_query: query ? `Results for "${query}"` : 'All upcoming events',
+        generated_at: new Date().toISOString(),
+      },
+    ];
+  });
 
   // Places + AI idea
   mock.onGet('/places').reply(200, db.places);
+  mock.onGet('/places/top').reply((config) => {
+    const limit = Number(new URLSearchParams((config.params as any) || {}).get('limit') || 5);
+    const sorted = [...db.places].sort((a, b) => (b.rating || 0) - (a.rating || 0));
+    return [200, sorted.slice(0, limit)];
+  });
   mock.onGet('/ai/date-idea').reply((config) => {
     const placeId = new URLSearchParams((config.params as any) || {}).get('placeId') || '';
     const place = db.places.find(p => p.id === placeId);
@@ -213,6 +309,44 @@ export function setupMockApi() {
       db.upcomingDates.unshift({ id: `d${Date.now()}`, partnerName: proposal.partnerName, when, location: proposal.location, status: 'confirmed' });
       return [200, { ok: true }];
     } catch { return [200, { ok: true }]; }
+  });
+
+  mock.onPost('/ideas').reply((config) => {
+    try {
+      const body = JSON.parse(config.data || '{}');
+      const matchId = String(body.match_id || `match-${Date.now()}`);
+      const shared: string[] = Array.isArray(body.shared_interests) ? body.shared_interests : [];
+      const now = new Date().toISOString();
+      const ideas = [0, 1, 2].map((idx) => {
+        const interest = shared[idx % (shared.length || 1)] || 'campus life';
+        const title = idx === 0 ? `Coffee chat about ${interest}` : idx === 1 ? `Explore ${interest}` : `Relax with ${interest}`;
+        const location = idx === 0 ? 'Campus Cafe' : idx === 1 ? 'Student Center' : 'Quad Lawn';
+        return {
+          id: Date.now() + idx,
+          match_id: matchId,
+          title,
+          description: `Enjoy ${interest} together at the ${location}.`,
+          location,
+          idea_rank: idx,
+          generated_at: now,
+          expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+        };
+      });
+      aiCache.ideas.set(matchId, { generated_at: now, ideas });
+      return [200, { match_id: matchId, ideas, cached: false, generated_at: now }];
+    } catch {
+      return [400, { detail: 'Invalid idea request' }];
+    }
+  });
+
+  mock.onGet('/ideas').reply((config) => {
+    const params = new URLSearchParams((config.params as any) || config.url?.split('?')[1] || '');
+    const matchId = params.get('match_id') || 'mock';
+    const cached = aiCache.ideas.get(matchId);
+    if (!cached) {
+      return [404, { detail: 'No cached ideas' }];
+    }
+    return [200, { match_id: matchId, ideas: cached.ideas, cached: true, generated_at: cached.generated_at }];
   });
 
   // (Groups removed in this build)

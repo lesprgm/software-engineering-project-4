@@ -91,5 +91,10 @@ class GroupMeeting(Base):
     scheduled_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     suggested_by: Mapped[str | None] = mapped_column(String, ForeignKey("users.id", ondelete="SET NULL"))
     note: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
 
     group: Mapped[Group] = relationship("Group", back_populates="meetings")

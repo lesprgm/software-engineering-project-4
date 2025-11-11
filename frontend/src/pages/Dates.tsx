@@ -7,12 +7,20 @@ import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ToastProvider';
 import { useNavigate } from 'react-router-dom';
 import Avatar from '../components/ui/Avatar';
+import { useAuthStore, User as AuthUser } from '../store/auth';
+import { aiApi, DateIdeaRequest, DateIdeasResponse, ParticipantProfile } from '../services/ai';
 
 type DateEvent = { id: string; partnerName: string; when: string; location?: string; status: 'proposed' | 'confirmed' };
 type Match = { id: string; name: string; avatarUrl?: string; sharedInterests?: string[] };
 type Plan = { partnerName: string; when: string; location: string; idea: string };
 type PlanOption = Plan & { reasons?: string[] };
-type PlanOptions = { partnerName: string; options: PlanOption[] };
+type PlanOptions = {
+  partnerName: string;
+  matchId?: string;
+  options: PlanOption[];
+  generatedAt?: string;
+  cached?: boolean;
+};
 type InboxProposal = { id: string; partnerName: string; when: string; location: string; idea: string };
 
 export default function Dates() {
@@ -25,6 +33,7 @@ export default function Dates() {
   const { notify } = useToast();
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const currentUser = useAuthStore((state) => state.user);
 
   const matchesQ = useQuery({
     queryKey: ['date-matches'],
@@ -42,8 +51,17 @@ export default function Dates() {
   });
 
   const optionsMut = useMutation({
-    mutationFn: async (matchId: string) => (await api.post('/dates/options', { matchId })).data as PlanOptions,
-    onSuccess: (res) => { setSelectedIdx(null); setCustomOpen(false); setOpenOptions(res); },
+    mutationFn: async (match: Match) => {
+      const payload = buildDateIdeaRequest(match, currentUser);
+      const response = await aiApi.generateDateIdeas(payload);
+      return { response: response.data, match };
+    },
+    onSuccess: ({ response, match }) => {
+      setSelectedIdx(null);
+      setCustomOpen(false);
+      setOpenOptions(mapIdeasToPlanOptions(match, response));
+    },
+    onError: () => notify('Could not generate ideas right now. Try again later.', 'error'),
   });
 
   const proposeMut = useMutation({
@@ -90,7 +108,7 @@ export default function Dates() {
                   </div>
                 )}
               </div>
-              <Button onClick={() => optionsMut.mutate(m.id)} loading={optionsMut.isPending} aria-label={`Get date options with ${m.name}`}>
+              <Button onClick={() => optionsMut.mutate(m)} loading={optionsMut.isPending} aria-label={`Get date options with ${m.name}`}>
                 See date options
               </Button>
             </div>
@@ -143,7 +161,20 @@ export default function Dates() {
               </div>
               <div className="mt-3 flex gap-2">
                 <Button onClick={() => { setAccepting(p); setAcceptWhen(p.when.substring(0,16)); }}>Accept</Button>
-                <Button variant="secondary" onClick={() => { setOpenOptions({ partnerName: p.partnerName, options: [{ partnerName: p.partnerName, when: p.when, location: p.location, idea: p.idea }] }); setSelectedIdx(0); setCustomOpen(true); }}>Suggest something else</Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setOpenOptions({
+                      partnerName: p.partnerName,
+                      matchId: p.id,
+                      options: [{ partnerName: p.partnerName, when: p.when, location: p.location, idea: p.idea }],
+                    });
+                    setSelectedIdx(0);
+                    setCustomOpen(true);
+                  }}
+                >
+                  Suggest something else
+                </Button>
               </div>
             </div>
           ))}
@@ -154,7 +185,12 @@ export default function Dates() {
         {openOptions && (
           <div className="space-y-4">
             <p className="text-sm text-gray-600">Based on your shared interests, here are a couple of ideas to choose from. Pick one or suggest your own.</p>
-            <p className="text-sm text-gray-600">Based on your shared interests, here are a couple of ideas to choose from. Pick one or suggest your own.</p>
+            {openOptions.generatedAt && (
+              <p className="text-xs text-gray-500">
+                Ideas generated {new Date(openOptions.generatedAt).toLocaleString()}
+                {openOptions.cached ? ' (cached)' : ''}
+              </p>
+            )}
             <div className="grid md:grid-cols-2 gap-3">
               {openOptions.options.map((opt, idx) => (
                 <label key={idx} className={`block rounded-xl p-3 cursor-pointer transition-shadow ${selectedIdx === idx ? 'ring-2 ring-rose-600' : ''}`}>
@@ -192,7 +228,12 @@ export default function Dates() {
 
             <div className="flex items-center gap-2">
               <Button
-                onClick={() => selectedIdx !== null && proposeMut.mutate({ matchId: (matchesQ.data || [])[0]?.id || 'm1', plan: openOptions.options[selectedIdx] })}
+                onClick={() => {
+                  if (selectedIdx === null) return;
+                  const plan = openOptions.options[selectedIdx];
+                  const matchId = openOptions.matchId || matchesQ.data?.[0]?.id || 'match';
+                  proposeMut.mutate({ matchId, plan });
+                }}
                 disabled={selectedIdx === null}
                 loading={proposeMut.isPending}
               >
@@ -224,7 +265,8 @@ export default function Dates() {
                     onClick={() => {
                       if (!customWhen || !customLocation) return;
                       const p: Plan = { partnerName: openOptions.partnerName, when: new Date(customWhen).toISOString(), location: customLocation, idea: customIdea || 'Fun hangout' };
-                      proposeMut.mutate({ matchId: (matchesQ.data || [])[0]?.id || 'm1', plan: p });
+                      const matchId = openOptions.matchId || matchesQ.data?.[0]?.id || 'match';
+                      proposeMut.mutate({ matchId, plan: p });
                     }}
                     loading={proposeMut.isPending}
                   >
@@ -254,4 +296,43 @@ export default function Dates() {
       </Modal>
     </div>
   );
+}
+
+function buildDateIdeaRequest(match: Match, user?: AuthUser | null): DateIdeaRequest {
+  const participants: ParticipantProfile[] = [];
+  if (user) {
+    participants.push({
+      name: user.name,
+      bio: user.email,
+      interests: user.interests || [],
+    });
+  }
+  participants.push({
+    name: match.name,
+    interests: match.sharedInterests || [],
+  });
+  return {
+    match_id: match.id,
+    shared_interests: match.sharedInterests || [],
+    location: 'Campus',
+    participants,
+  };
+}
+
+function mapIdeasToPlanOptions(match: Match, response: DateIdeasResponse): PlanOptions {
+  const base = Date.now() + 2 * 3600 * 1000;
+  const options: PlanOption[] = response.ideas.map((idea, idx) => ({
+    partnerName: match.name,
+    when: new Date(base + idx * 3600 * 1000).toISOString(),
+    location: idea.location || 'Campus Center',
+    idea: `${idea.title}: ${idea.description}`,
+    reasons: [idea.title, idea.location].filter(Boolean) as string[],
+  }));
+  return {
+    partnerName: match.name,
+    matchId: match.id,
+    options,
+    generatedAt: response.generated_at,
+    cached: response.cached,
+  };
 }

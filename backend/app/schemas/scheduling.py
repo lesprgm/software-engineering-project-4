@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, validator
@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, validator
 class AvailabilityBase(BaseModel):
     start_time: datetime
     end_time: datetime
-    timezone: str = "UTC"
+    timezone: str = Field(default="UTC", min_length=1)
 
     @validator("end_time")
     def validate_duration(cls, value: datetime, values: dict[str, datetime]) -> datetime:
@@ -16,9 +16,15 @@ class AvailabilityBase(BaseModel):
             raise ValueError("end_time must be after start_time")
         return value
 
+    @validator("timezone")
+    def validate_timezone(cls, v):
+        if not v or not v.strip():
+            return "UTC"
+        return v.strip()
+
 
 class AvailabilityCreate(AvailabilityBase):
-    user_id: str
+    user_id: str = Field(..., min_length=1)
 
 
 class AvailabilityRead(AvailabilityBase):
@@ -32,26 +38,50 @@ class AvailabilityRead(AvailabilityBase):
 
 
 class MeetingPreferences(BaseModel):
-    duration_minutes: int = Field(60, ge=15, le=240)
-    window_days: int = Field(14, ge=1, le=30)
-    limit: int = Field(5, ge=1, le=20)
+    duration_minutes: int = Field(60, ge=15, le=240, description="Meeting duration in minutes")
+    window_days: int = Field(14, ge=1, le=30, description="Days ahead to search for availability")
+    limit: int = Field(5, ge=1, le=20, description="Maximum number of suggestions to return")
 
 
 class MeetingSuggestion(BaseModel):
     start_time: datetime
     end_time: datetime
     participant_ids: List[str]
-    conflicts: List[str] = Field(default_factory=list)
+    conflicts: List[str] = Field(default_factory=list, description="User IDs with conflicts")
 
 
 class MeetingSuggestionResponse(BaseModel):
-    group_id: str
     suggestions: List[MeetingSuggestion]
-    preferences: MeetingPreferences
 
 
 class MeetingConfirmationRequest(BaseModel):
-    suggestion_start: datetime
-    suggestion_end: datetime
+    user_id: str = Field(..., min_length=1)
+    start_time: datetime
+    end_time: datetime
+    title: Optional[str] = Field(None, max_length=200)
+
+    @validator("end_time")
+    def validate_meeting_range(cls, value: datetime, values: dict[str, datetime]) -> datetime:
+        start = values.get("start_time")
+        if start and value <= start:
+            raise ValueError("end_time must be after start_time")
+        return value
+
+    @validator("title")
+    def validate_title(cls, v):
+        if v:
+            return v.strip()
+        return v
+
+
+class GroupMeetingRead(BaseModel):
+    id: int
+    group_id: str
+    scheduled_start: datetime
+    scheduled_end: datetime
     suggested_by: Optional[str] = None
     note: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        orm_mode = True

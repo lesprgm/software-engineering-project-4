@@ -8,6 +8,7 @@ import Events from './pages/Events';
 import Messages from './pages/Messages';
 import Dates from './pages/Dates';
 import Choose from './pages/Choose';
+import Places from './pages/Places';
 import { useAuthStore } from './store/auth';
 import { ToastProvider } from './components/ToastProvider';
 
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/matches" element={<ProtectedRoute><Matches /></ProtectedRoute>} />
             <Route path="/dates" element={<ProtectedRoute><Dates /></ProtectedRoute>} />
             <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
+            <Route path="/places" element={<ProtectedRoute><Places /></ProtectedRoute>} />
             <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
             <Route path="*" element={<div className="text-gray-600">Page not found</div>} />

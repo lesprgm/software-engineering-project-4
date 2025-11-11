@@ -1,4 +1,5 @@
 ﻿import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
@@ -7,6 +8,8 @@ import Button from '../components/ui/Button';
 import SwipeCard, { SwipeCardHandle } from '../components/ui/SwipeCard';
 import { useToast } from '../components/ToastProvider';
 import { DEFAULT_AVATAR } from '../lib/media';
+import { useAuthStore, User as AuthUser } from '../store/auth';
+import { aiApi, MatchInsightRequest, ParticipantProfile } from '../services/ai';
 
 type Suggestion = {
   id: string;
@@ -20,6 +23,7 @@ type Suggestion = {
 export default function Matches() {
   const { notify } = useToast();
   const qc = useQueryClient();
+  const currentUser = useAuthStore((state) => state.user);
   const bypass = import.meta.env.DEV && import.meta.env.VITE_BYPASS_AUTH === '1';
   const [params] = useSearchParams();
   const type = (params.get('type') as 'user' | 'group' | null) || 'user';
@@ -34,6 +38,26 @@ export default function Matches() {
   const [index, setIndex] = useState(0);
   const suggestions = useMemo(() => data || [], [data]);
   const current = useMemo(() => suggestions[index], [suggestions, index]);
+
+  const insightQuery = useQuery({
+    queryKey: ['match-insight', current?.id],
+    enabled: !!current,
+    queryFn: async () => {
+      if (!current) return null;
+      try {
+        const res = await aiApi.getMatchInsight(current.id);
+        return res.data;
+      } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 404) {
+          const payload = buildInsightRequest(current, currentUser);
+          const res = await aiApi.generateMatchInsight(current.id, payload);
+          return res.data;
+        }
+        throw error;
+      }
+    },
+    staleTime: 1000 * 60 * 10,
+  });
 
   const accept = useMutation({
     mutationFn: async (id: string) => (await api.post(`/matches/${id}/accept`)).data,
@@ -82,6 +106,8 @@ export default function Matches() {
   if (isLoading) return <div>Loading suggestions...</div>;
   if (isError) return <div>Failed to load suggestions</div>;
   if (!current) return <div>No more suggestions. Check back later.</div>;
+
+  const derivedInsight = insightQuery.data?.summary_text || current.insight;
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -145,11 +171,15 @@ export default function Matches() {
               </div>
             </div>
           </div>
-          {current.insight && (
+          {(derivedInsight || insightQuery.isLoading) && (
             <div className="p-4 md:p-6 bg-white">
               <div className="text-sm md:text-base text-gray-800">
                 <span className="font-semibold">Match insight:</span>{' '}
-                <span className="italic text-gray-700">{current.insight}</span>
+                {insightQuery.isLoading ? (
+                  <span className="italic text-gray-400">Generating personalized summary…</span>
+                ) : (
+                  <span className="italic text-gray-700">{derivedInsight}</span>
+                )}
               </div>
             </div>
           )}
@@ -160,10 +190,23 @@ export default function Matches() {
   );
 }
 
-
-
-
-
-
-
-
+function buildInsightRequest(target: Suggestion, user?: AuthUser | null): MatchInsightRequest {
+  const participants: ParticipantProfile[] = [];
+  if (user) {
+    participants.push({
+      name: user.name,
+      bio: user.email,
+      interests: user.interests || [],
+    });
+  }
+  participants.push({
+    name: target.name,
+    interests: target.interests || [],
+  });
+  return {
+    participants,
+    shared_interests: target.interests || [],
+    location: 'Campus',
+    mood: target.type === 'group' ? 'collaborative' : 'upbeat',
+  };
+}

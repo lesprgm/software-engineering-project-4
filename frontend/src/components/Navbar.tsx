@@ -17,6 +17,7 @@ export default function Navbar() {
             <>
               <NavLink to="/" className={linkClass}>Matches</NavLink>
               <NavLink to="/events" className={linkClass}>Events</NavLink>
+              <NavLink to="/places" className={linkClass}>Places</NavLink>
               <NavLink to="/dates" className={linkClass}>Dates</NavLink>
               <NavLink to="/messages" className={linkClass}>Messages</NavLink>
               <NavLink to="/profile" className={linkClass}>Profile</NavLink>

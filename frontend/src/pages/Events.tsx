@@ -1,4 +1,4 @@
-﻿import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import api from '../lib/api';
 import Card from '../components/ui/Card';
@@ -6,8 +6,9 @@ import Button from '../components/ui/Button';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ToastProvider';
 import Map from '../components/Map';
+import { aiApi, EventNlpResponse, EventRecord } from '../services/ai';
 
-type Event = {
+type UiEvent = {
   id: string;
   title: string;
   date: string;
@@ -25,43 +26,48 @@ export default function Events() {
   const qc = useQueryClient();
   const { notify } = useToast();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<EventNlpResponse>({
     queryKey: ['events', query],
-    queryFn: async () => (await api.get('/events', { params: { q: query } })).data as Event[],
+    queryFn: async () => {
+      const trimmed = query.trim();
+      try {
+        if (!trimmed) {
+          const response = await api.get<EventRecord[]>('/events/');
+          return buildFallbackResponse({
+            events: response.data,
+            interpreted_query: 'All upcoming events',
+          });
+        }
+        const response = await aiApi.searchEvents(trimmed);
+        return response.data;
+      } catch (error) {
+        console.error('Unable to load events', error);
+        return buildFallbackResponse({
+          query: trimmed,
+          interpreted_query: 'Unable to load events.',
+          error: true,
+        });
+      }
+    },
+    retry: false,
   });
 
-  const selected = useMemo(() => data?.find((e) => e.id === openId) || null, [openId, data]);
+  const events = useMemo<UiEvent[]>(() => (data?.events || []).map(adaptEventRecord), [data]);
+  const selected = useMemo(() => events.find((event) => event.id === openId) || null, [openId, events]);
+  const filters = data?.filters;
+  const loadError = data?.error === true;
 
   function makeOsmEmbed(lat: number, lng: number) {
-    const d = 0.005; // bounding box delta
-    const bbox = `${lng - d}%2C${lat - d}%2C${lng + d}%2C${lat + d}`;
+    const delta = 0.005; // small bounding box around the marker
+    const bbox = `${lng - delta}%2C${lat - delta}%2C${lng + delta}%2C${lat + delta}`;
     return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lng}`;
   }
 
-  function toIcs(ev: Event) {
-    const dtStart = new Date(ev.date);
-    const dtEnd = new Date(dtStart.getTime() + 60 * 60 * 1000);
-    const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const ics = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//CampusConnect//EN',
-      'BEGIN:VEVENT',
-      `UID:${ev.id}@campus-connect`,
-      `DTSTAMP:${fmt(new Date())}`,
-      `DTSTART:${fmt(dtStart)}`,
-      `DTEND:${fmt(dtEnd)}`,
-      `SUMMARY:${ev.title}`,
-      `LOCATION:${ev.location}`,
-      'END:VEVENT',
-      'END:VCALENDAR',
-    ].join('\r\n');
-    return new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  }
+  async function share(event: UiEvent) {
+    const text = `${event.title}\n${new Date(event.date).toLocaleString()} @ ${event.location}` +
+      (event.description ? `\n\n${event.description}` : '');
+    const shareData: ShareData = { title: event.title, text, url: `${window.location.origin}/events` };
 
-  async function share(ev: Event) {
-    const text = `${ev.title}\n${new Date(ev.date).toLocaleString()} @ ${ev.location}` + (ev.description ? `\n\n${ev.description}` : '');
-    const shareData: ShareData = { title: ev.title, text, url: window.location.origin + '/events' };
     try {
       if (navigator.share) {
         await navigator.share(shareData);
@@ -73,7 +79,7 @@ export default function Events() {
         notify('Sharing not supported on this device', 'error');
       }
     } catch {
-      // cancelled
+      // user cancelled the share dialog
     }
   }
 
@@ -85,15 +91,15 @@ export default function Events() {
           className="w-full rounded-md border border-gray-300 px-3 py-2"
           placeholder="Search events (natural language supported)"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(event) => setQuery(event.target.value)}
         />
         <Button onClick={() => qc.invalidateQueries({ queryKey: ['events', query] })}>Search</Button>
       </div>
 
       {isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="overflow-hidden rounded-2xl border bg-white shadow-sm animate-pulse">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <div key={index} className="overflow-hidden rounded-2xl border bg-white shadow-sm animate-pulse">
               <div className="h-40 bg-gray-200" />
               <div className="p-4 space-y-2">
                 <div className="h-4 bg-gray-200 rounded w-2/3" />
@@ -104,48 +110,77 @@ export default function Events() {
         </div>
       )}
 
-      {!!data?.length && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {data.map((ev) => (
-            <button
-              key={ev.id}
-              onClick={() => setOpenId(ev.id)}
-              className="text-left group focus:outline-none"
-              aria-label={`Open details for ${ev.title}`}
-            >
-              <Card className="overflow-hidden rounded-2xl border-0 shadow-xl">
-                <div className="relative h-64 md:h-72">
-                  <img
-                    src={ev.imageUrl || ${import.meta.env.BASE_URL || '/'}events/placeholder.svg}
-                    alt="Event poster"
-                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
-                  <div className="absolute bottom-3 left-3 right-3">
-                    <div className="text-white font-semibold text-lg drop-shadow line-clamp-1">{ev.title}</div>
-                    <div className="text-white/90 text-xs mt-0.5 line-clamp-1">
-                      {new Date(ev.date).toLocaleString()} â€¢ {ev.location}
-                    </div>
-                    {!!ev.tags?.length && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
-                        {ev.tags.slice(0, 3).map((t) => (
-                          <span key={t} className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-gray-800 backdrop-blur">
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </Card>
-            </button>
-          ))}
+      {loadError && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Unable to reach the events service. Showing any cached results.
         </div>
       )}
-      {!isLoading && !data?.length && (
-        <div className="text-center text-gray-600 py-10">
-          No events match your search.
-        </div>
+
+      {!!events.length && (
+        <>
+          {query.trim() && data && (
+            <Card className="p-4">
+              <div className="text-sm text-gray-700">
+                <div className="font-semibold text-gray-900">AI interpreted:</div>
+                <p>{data.interpreted_query}</p>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-600">
+                {filters?.date_range?.start && (
+                  <span className="rounded-full border px-2 py-0.5">
+                    From {new Date(filters.date_range.start).toLocaleDateString()}
+                    {filters.date_range.end ? ` to ${new Date(filters.date_range.end).toLocaleDateString()}` : ''}
+                  </span>
+                )}
+                {filters?.location && <span className="rounded-full border px-2 py-0.5">Location: {filters.location}</span>}
+                {filters?.category && <span className="rounded-full border px-2 py-0.5">Category: {filters.category}</span>}
+                {filters?.keywords?.map((keyword) => (
+                  <span key={keyword} className="rounded-full border px-2 py-0.5">#{keyword}</span>
+                ))}
+              </div>
+            </Card>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {events.map((event) => (
+              <button
+                key={event.id}
+                onClick={() => setOpenId(event.id)}
+                className="text-left group focus:outline-none"
+                aria-label={`Open details for ${event.title}`}
+              >
+                <Card className="overflow-hidden rounded-2xl border-0 shadow-xl">
+                  <div className="relative h-64 md:h-72">
+                    <img
+                      src={event.imageUrl || 'https://via.placeholder.com/800x400?text=Event'}
+                      alt="Event poster"
+                      className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    <div className="absolute bottom-3 left-3 right-3">
+                      <div className="text-white font-semibold text-lg drop-shadow line-clamp-1">{event.title}</div>
+                      <div className="text-white/90 text-xs mt-0.5 line-clamp-1">
+                        {new Date(event.date).toLocaleString()} • {event.location}
+                      </div>
+                      {!!event.tags?.length && (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {event.tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-gray-800 backdrop-blur">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {!isLoading && !events.length && !loadError && (
+        <div className="text-center text-gray-600 py-10">No events match your search.</div>
       )}
 
       <Modal open={!!selected} onClose={() => setOpenId(null)} title={selected ? selected.title : ''}>
@@ -160,9 +195,7 @@ export default function Events() {
               {!!selected.tags?.length && (
                 <div className="mt-1 text-xs text-gray-500">{selected.tags.join(', ')}</div>
               )}
-              {selected.description && (
-                <p className="mt-2">{selected.description}</p>
-              )}
+              {selected.description && <p className="mt-2">{selected.description}</p>}
             </div>
 
             {selected.lat && selected.lng && (
@@ -174,7 +207,6 @@ export default function Events() {
                     title="Event location map (OpenStreetMap fallback)"
                     src={makeOsmEmbed(selected.lat, selected.lng)}
                     className="w-full h-full"
-                    loading="lazy"
                   />
                 )}
               </div>
@@ -184,7 +216,10 @@ export default function Events() {
               <a
                 href={(() => {
                   const start = new Date(selected.date).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-                  const end = new Date(new Date(selected.date).getTime() + 60*60*1000).toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+                  const end = new Date(new Date(selected.date).getTime() + 60 * 60 * 1000)
+                    .toISOString()
+                    .replace(/[-:]/g, '')
+                    .split('.')[0] + 'Z';
                   const params = new URLSearchParams({
                     action: 'TEMPLATE',
                     text: selected.title,
@@ -216,8 +251,28 @@ export default function Events() {
   );
 }
 
+function adaptEventRecord(record: EventRecord): UiEvent {
+  return {
+    id: String(record.id),
+    title: record.title,
+    date: record.start_time || record.end_time || new Date().toISOString(),
+    location: record.location,
+    tags: record.tags || [],
+    imageUrl: record.imageUrl || undefined,
+    description: record.description || undefined,
+    lat: typeof record.lat === 'number' ? record.lat : undefined,
+    lng: typeof record.lng === 'number' ? record.lng : undefined,
+  };
+}
 
-
-
-
-
+function buildFallbackResponse(overrides?: Partial<EventNlpResponse & { error?: boolean }>): EventNlpResponse & { error?: boolean } {
+  return {
+    query: '',
+    filters: { keywords: [] },
+    events: [],
+    cached: false,
+    interpreted_query: '',
+    generated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
