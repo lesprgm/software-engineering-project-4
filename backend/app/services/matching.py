@@ -40,7 +40,7 @@ class MatchingService:
             return []
 
         candidates: list[GroupMatchCandidate] = []
-        others: Sequence[Group] = (
+        others: list[Group] = (
             db.execute(
                 select(Group)
                 .options(joinedload(Group.members))
@@ -112,6 +112,7 @@ class MatchingService:
                     min(cls._ensure_utc(row.end_time), window_end),
                 )
                 for row in availability_rows
+                if row.start_time and row.end_time
             ]
         )
         return GroupProfile(group=group, member_ids=member_ids, availability_windows=availability_windows)
