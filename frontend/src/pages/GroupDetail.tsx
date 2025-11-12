@@ -11,11 +11,18 @@ import {
   useConfirmMeeting,
   useGroupMatches,
 } from '../hooks/useGroups';
+import { useToast } from '../components/ToastProvider';
+import { downloadCalendarFile } from '../lib/calendar';
 import { useAuthStore } from '../store/auth';
+import { useNotifications } from '../store/notifications';
+import { useBreadcrumb } from '../hooks/useBreadcrumb';
+import { ViewTransitionLink } from '../components/navigation/ViewTransitionLink';
 
 export default function GroupDetail() {
   const { groupId } = useParams<{ groupId: string }>();
   const { user } = useAuthStore();
+  const { notify } = useToast();
+  const { addNotification } = useNotifications();
   
   const { data: group } = useGroup(groupId!);
   const { data: messagesData } = useGroupMessages(groupId!);
@@ -35,6 +42,13 @@ export default function GroupDetail() {
   const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   
   const [activeTab, setActiveTab] = useState<'chat' | 'schedule' | 'matches'>('chat');
+  useBreadcrumb(group?.name ?? 'Group detail', { parent: '/groups' });
+  const tabLabels = {
+    chat: 'Chat',
+    schedule: 'Schedule',
+    matches: 'Group matches',
+  } as const;
+  const activeTabLabel = tabLabels[activeTab];
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +60,11 @@ export default function GroupDetail() {
         content: messageContent.trim(),
       });
       setMessageContent('');
+      addNotification({
+        kind: 'message',
+        title: 'Message sent',
+        body: `Shared in ${group?.name ?? 'group chat'}.`,
+      });
     } catch (error) {
       console.error('Failed to send message:', error);
     }
@@ -65,6 +84,12 @@ export default function GroupDetail() {
       setStartTime('');
       setEndTime('');
       setShowAvailabilityForm(false);
+      notify('Availability added for this group.', 'success');
+      addNotification({
+        kind: 'event',
+        title: 'Availability shared',
+        body: `Others can now see when you're free for ${group?.name ?? 'the group'}.`,
+      });
     } catch (error) {
       console.error('Failed to add availability:', error);
     }
@@ -77,8 +102,12 @@ export default function GroupDetail() {
         window_days: 14,
         limit: 5,
       });
-      console.log('Meeting suggestions:', result.data);
-      alert(`Found ${result.data.suggestions.length} meeting suggestions! Check console for details.`);
+      notify(`Found ${result.data.suggestions.length} meeting suggestions.`, 'success');
+      addNotification({
+        kind: 'event',
+        title: 'Meeting suggestions ready',
+        body: `${result.data.suggestions.length} time slots surfaced for ${group?.name ?? 'your group'}.`,
+      });
     } catch (error) {
       console.error('Failed to get suggestions:', error);
     }
@@ -118,6 +147,15 @@ export default function GroupDetail() {
               </div>
             )}
           </div>
+        </div>
+        <div className="mb-4 text-xs text-gray-500 flex flex-wrap items-center gap-1">
+          <ViewTransitionLink to="/groups" className="font-semibold text-rose-500 hover:underline">
+            Groups
+          </ViewTransitionLink>
+          <span>/</span>
+          <span className="font-semibold text-gray-700">{group.name}</span>
+          <span>/</span>
+          <span className="text-gray-900">{activeTabLabel}</span>
         </div>
 
         {/* Tabs */}
@@ -181,13 +219,23 @@ export default function GroupDetail() {
 
               {/* Send Message Form */}
               <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
-                  value={messageContent}
-                  onChange={(e) => setMessageContent(e.target.value)}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2"
-                  placeholder="Type a message..."
-                />
+                <div className="flex-1">
+                  <label htmlFor="group-message-input" className="sr-only">
+                    Group message
+                  </label>
+                  <input
+                    id="group-message-input"
+                    type="text"
+                    value={messageContent}
+                    onChange={(e) => setMessageContent(e.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2"
+                    placeholder="Type a message..."
+                    aria-describedby="group-message-help"
+                  />
+                  <p id="group-message-help" className="sr-only">
+                    Press enter to send your note to the group.
+                  </p>
+                </div>
                 <button
                   type="submit"
                   disabled={postMessage.isPending}
@@ -236,39 +284,42 @@ export default function GroupDetail() {
               {showAvailabilityForm && (
                 <form onSubmit={handleAddAvailability} className="mb-4 space-y-3 border-t pt-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Start Time</label>
+                    <label htmlFor="availability-start" className="block text-sm font-medium text-gray-700">Start Time</label>
                     <input
+                      id="availability-start"
                       type="datetime-local"
                       value={startTime}
                       onChange={(e) => setStartTime(e.target.value)}
                       className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Select start time"
-                      title="Select start time"
                       required
+                      aria-describedby="availability-start-hint"
                     />
+                    <p id="availability-start-hint" className="text-xs text-gray-500 mt-1">Local time for when you become available.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">End Time</label>
+                    <label htmlFor="availability-end" className="block text-sm font-medium text-gray-700">End Time</label>
                     <input
+                      id="availability-end"
                       type="datetime-local"
                       value={endTime}
                       onChange={(e) => setEndTime(e.target.value)}
                       className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="Select end time"
-                      title="Select end time"
                       required
+                      aria-describedby="availability-end-hint"
                     />
+                    <p id="availability-end-hint" className="text-xs text-gray-500 mt-1">When you&apos;re no longer free.</p>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Timezone</label>
+                    <label htmlFor="availability-timezone" className="block text-sm font-medium text-gray-700">Timezone</label>
                     <input
+                      id="availability-timezone"
                       type="text"
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
                       className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
-                      placeholder="e.g. America/New_York"
-                      title="Timezone (e.g. America/New_York)"
+                      aria-describedby="availability-timezone-hint"
                     />
+                    <p id="availability-timezone-hint" className="text-xs text-gray-500 mt-1">Example: America/New_York.</p>
                   </div>
                   <button
                     type="submit"
@@ -321,6 +372,22 @@ export default function GroupDetail() {
                           Conflicts: {suggestion.conflicts.length}
                         </div>
                       )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          downloadCalendarFile({
+                            title: `${group.name} meetup`,
+                            start: suggestion.start_time,
+                            end: suggestion.end_time,
+                            location: group.description ?? 'Campus Center',
+                            description: `Planned with ${suggestion.participant_ids.length} participants.`,
+                            fileName: `${group.name}-suggestion`,
+                          })
+                        }
+                        className="mt-3 inline-flex items-center text-xs font-medium text-blue-600 hover:text-blue-500"
+                      >
+                        Save to calendar
+                      </button>
                     </div>
                   ))}
                 </div>

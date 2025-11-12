@@ -48,6 +48,7 @@ def client() -> TestClient:
         finally:
             db.close()
 
+    previous_overrides = dict(app.dependency_overrides)
     app.dependency_overrides[get_db] = override_get_db
     app.state._session_local = testing_session
 
@@ -55,6 +56,7 @@ def client() -> TestClient:
         yield test_client
 
     app.dependency_overrides.clear()
+    app.dependency_overrides.update(previous_overrides)
     if hasattr(app.state, "_session_local"):
         delattr(app.state, "_session_local")
     Base.metadata.drop_all(bind=engine)

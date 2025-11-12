@@ -1,8 +1,8 @@
-import type { Config } from 'jest';
-
-const config: Config = {
+/** @type {import('jest').Config} */
+module.exports = {
   testEnvironment: 'jsdom',
   setupFilesAfterEnv: ['<rootDir>/setupTests.ts'],
+  extensionsToTreatAsEsm: ['.ts', '.tsx'],
   moduleNameMapper: {
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
   },
@@ -12,10 +12,8 @@ const config: Config = {
       {
         tsconfig: '<rootDir>/tsconfig.json',
         diagnostics: false,
+        useESM: true,
       },
     ],
   },
 };
-
-export default config;
-

@@ -1,12 +1,17 @@
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import axios from 'axios';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import api from '../lib/api';
-import { useAuthStore } from '../store/auth';
-import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore, mapProfileToAuthUser } from '../store/auth';
 import { useToast } from '../components/ToastProvider';
+import { ViewTransitionLink } from '../components/navigation/ViewTransitionLink';
+import { useViewNavigate } from '../hooks/useViewNavigate';
+import { useBreadcrumb } from '../hooks/useBreadcrumb';
+import { normalizeUserProfile, usersService } from '../services/users';
+import { getRuntimeEnv } from '../lib/env';
 
 const schema = z.object({
   name: z.string().min(2),
@@ -16,43 +21,55 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function Signup() {
-  const navigate = useNavigate();
+  const navigate = useViewNavigate();
   const { notify } = useToast();
   const login = useAuthStore((s) => s.login);
+  useBreadcrumb('Signup');
+  const env = getRuntimeEnv();
 
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
 
-  const onSubmit = async (data: FormValues) => {
-    const bypass = import.meta.env.DEV && import.meta.env.VITE_BYPASS_AUTH === '1';
-    if (bypass) {
-      login('dev-bypass-token', {
-        id: 'dev-user',
-        name: data.name,
+  const handleDevSignup = async (data: FormValues) => {
+    try {
+      const profile = await usersService.createProfile({
         email: data.email,
-        interests: [],
+        displayName: data.name,
+        password: data.password,
       });
+      login(profile.id, mapProfileToAuthUser(profile));
       notify('Signed up (dev bypass)', 'success');
       navigate('/matches');
+    } catch (error: any) {
+      if (axios.isAxiosError(error)) {
+        notify(error.response?.data?.detail || 'Signup failed', 'error');
+      } else {
+        notify('Signup failed', 'error');
+      }
+    }
+  };
+
+  const onSubmit = async (data: FormValues) => {
+    const bypass = env.DEV && env.VITE_BYPASS_AUTH === '1';
+    if (bypass) {
+      await handleDevSignup(data);
       return;
     }
     try {
-      const res = await api.post('/auth/signup', data);
+      const res = await api.post('/auth/signup', {
+        email: data.email,
+        display_name: data.name,
+        password: data.password,
+      });
       const { access_token, user } = res.data;
-      login(access_token, user);
+      const profile = normalizeUserProfile(user);
+      login(access_token, mapProfileToAuthUser(profile));
       notify('Account created!', 'success');
       navigate('/profile');
     } catch (err: any) {
-      if (import.meta.env.DEV) {
-        login('dev-bypass-token', {
-          id: 'dev-user',
-          name: data.name,
-          email: data.email,
-          interests: [],
-        });
-        notify('Signed up (dev fallback)', 'success');
-        navigate('/matches');
+      if (env.DEV) {
+        await handleDevSignup(data);
         return;
       }
       notify(err?.response?.data?.detail || 'Signup failed', 'error');
@@ -68,7 +85,12 @@ export default function Signup() {
         <Input label="Password" type="password" {...register('password')} error={errors.password?.message} />
         <Button type="submit" loading={isSubmitting} aria-label="Submit signup">Sign up</Button>
       </form>
-      <p className="mt-3 text-sm text-gray-600">Have an account? <Link to="/login" className="text-blue-600 underline">Log in</Link></p>
+      <p className="mt-3 text-sm text-gray-600">
+        Have an account?{' '}
+        <ViewTransitionLink to="/login" className="text-blue-600 underline">
+          Log in
+        </ViewTransitionLink>
+      </p>
     </div>
   );
 }

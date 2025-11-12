@@ -1,12 +1,11 @@
 import axios from 'axios';
 import { useAuthStore } from '../store/auth';
+import { getRuntimeEnv } from './env';
+
+const env = getRuntimeEnv();
 
 function resolveBaseURL() {
-  if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === '1') {
-    // When mocks are enabled, keep requests local and predictable
-    return '/api';
-  }
-  const raw = (import.meta.env.VITE_API_BASE_URL || '').trim();
+  const raw = (env.VITE_API_BASE_URL || '').trim();
   if (raw && /^https?:\/\//i.test(raw)) return raw; // full URL
   // Default to Vite dev proxy path in development
   return '/api';

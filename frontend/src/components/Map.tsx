@@ -1,4 +1,5 @@
 import React from 'react';
+import { clsx } from 'clsx';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 
 type Props = {
@@ -8,9 +9,12 @@ type Props = {
   className?: string;
 };
 
-export default function Map({ lat, lng, zoom = 15, className }: Props) {
+export default function Map({ lat = 0, lng = 0, zoom = 15, className }: Partial<Props> = {}) {
+  if (lat === undefined || lng === undefined) {
+    return <div className={clsx('map-shell', className)} />;
+  }
   return (
-    <div className={className ?? ''} style={{ height: '100%', width: '100%' }}>
+    <div className={clsx('map-shell', className)} style={{ height: '100%', width: '100%' }}>
       <MapContainer center={[lat, lng]} zoom={zoom} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

@@ -10,9 +10,8 @@ Tech stack
 
 Getting started
 1) Optional: Copy `.env.example` to `.env`.
-   - `VITE_USE_MOCKS=1` lets you run the app with a built‑in mock API (no backend required).
    - `VITE_BYPASS_AUTH=1` auto-logs a dev user so you can access protected pages without the login flow.
-   - If you have a backend, set `VITE_API_BASE_URL` to its URL; otherwise the app uses `/api` + Vite proxy to `http://localhost:8000`.
+   - Set `VITE_API_BASE_URL` to your backend URL (default `/api` hits the Vite dev proxy to `http://localhost:8000`).
 2) Install deps: `npm install`
 3) Run dev server: `npm run dev` (opens on http://localhost:5173)
 4) Run tests: `npm test`

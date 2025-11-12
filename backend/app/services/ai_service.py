@@ -19,7 +19,9 @@ from ..schemas.ai import (
     EventFilters,
     MatchInsightRequest,
 )
+from ..schemas.events import EventQueryFilters
 from .ai_client import AIClient, ModerationResult
+from .events import EventService
 
 settings = get_settings()
 ai_client = AIClient(settings)
@@ -139,13 +141,14 @@ class AIService:
         query: str,
         *,
         refresh: bool = False,
+        viewer_id: str | None = None,
     ) -> tuple[EventFilters, list[Event], bool, str]:
         cache_key = cls._fingerprint({"query": query})
         cached = cls._get_cache(db, "event_search", cache_key)
         if cached and not refresh:
             filters = cls._filters_from_payload(cached.payload.get("filters", {}))
             interpreted = cached.payload.get("interpreted_query", query)
-            events = cls._filter_events(db, filters)
+            events = cls._filter_events(db, filters, viewer_id=viewer_id)
             return filters, events, True, interpreted
 
         filters_dict = cls._call_llm_for_filters(query) or cls._heuristic_filters(query)
@@ -157,7 +160,7 @@ class AIService:
             cache_key=cache_key,
             payload={"filters": filters_dict, "interpreted_query": interpreted_query},
         )
-        events = cls._filter_events(db, filters)
+        events = cls._filter_events(db, filters, viewer_id=viewer_id)
         return filters, events, False, interpreted_query
 
     # --- Match helpers -----------------------------------------------------------
@@ -369,17 +372,14 @@ class AIService:
             return None
 
     @classmethod
-    def _filter_events(cls, db: Session, filters: EventFilters) -> list[Event]:
-        query = select(Event)
-        if filters.date_range and filters.date_range.start:
-            query = query.where(Event.start_time >= filters.date_range.start)
-        if filters.date_range and filters.date_range.end:
-            query = query.where(Event.start_time <= filters.date_range.end)
-        if filters.location:
-            query = query.where(Event.location.ilike(f"%{filters.location}%"))
-        if filters.category:
-            query = query.where(Event.category.ilike(f"%{filters.category}%"))
-        return db.execute(query.order_by(Event.start_time.asc())).scalars().all()
+    def _filter_events(cls, db: Session, filters: EventFilters, viewer_id: str | None) -> list[Event]:
+        query_filters = EventQueryFilters(
+            start_time=filters.date_range.start if filters.date_range else None,
+            end_time=filters.date_range.end if filters.date_range else None,
+            location=filters.location,
+            category=filters.category,
+        )
+        return EventService.list_events(db, filters=query_filters, viewer_id=viewer_id)
 
     # --- Cache helpers -----------------------------------------------------------
     @classmethod

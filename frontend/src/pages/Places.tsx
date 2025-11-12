@@ -1,15 +1,19 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { MapContainer, TileLayer, CircleMarker, Tooltip } from 'react-leaflet';
 import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
-import Map from '../components/Map';
+import MapEmbed from '../components/Map';
+import { FALLBACK_PLACES } from '../data/fallbackPlaces';
 import { placeService, Place } from '../services/places';
+import { useBreadcrumb } from '../hooks/useBreadcrumb';
 
 type ViewMode = 'all' | 'top';
 
 export default function Places() {
   const [mode, setMode] = useState<ViewMode>('all');
-  const { data, isLoading, isError } = useQuery({
+  useBreadcrumb('Places', { parent: '/' });
+  const { data, isLoading } = useQuery({
     queryKey: ['places', mode],
     queryFn: async () => {
       if (mode === 'top') {
@@ -19,9 +23,21 @@ export default function Places() {
       const res = await placeService.list();
       return res.data;
     },
+    retry: 1,
   });
 
-  const places = useMemo(() => (data || []).map(normalizePlace), [data]);
+  const remotePlaces = useMemo(() => (data || []).map(normalizePlace), [data]);
+  const fallbackPlaces = useMemo(() => {
+    const source =
+      mode === 'top'
+        ? [...FALLBACK_PLACES].sort((a, b) => b.rating - a.rating).slice(0, 6)
+        : FALLBACK_PLACES;
+    return source.map(normalizePlace);
+  }, [mode]);
+
+  const hasRemoteData = remotePlaces.length > 0;
+  const showingFallback = !hasRemoteData && !isLoading;
+  const places = hasRemoteData ? remotePlaces : fallbackPlaces;
 
   return (
     <div className="space-y-4">
@@ -42,11 +58,41 @@ export default function Places() {
         </div>
       )}
 
-      {isError && (
-        <div className="text-red-600">Unable to load places right now.</div>
+      {showingFallback && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Showing campus-favorite spots while we reconnect to the live places service.
+        </div>
       )}
 
-      {!isLoading && !isError && (
+      {places.some((place) => place.latitude && place.longitude) && (
+        <Card className="p-0 overflow-hidden">
+          <div className="h-80 w-full relative">
+            <MapContainer center={[places[0].latitude ?? 0, places[0].longitude ?? 0]} zoom={14} scrollWheelZoom={false} className="h-full w-full">
+              <TileLayer
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              />
+              {clusterPlaces(places).map((cluster) => (
+                <CircleMarker
+                  key={`${cluster.lat}-${cluster.lng}`}
+                  center={[cluster.lat, cluster.lng]}
+                  radius={8 + cluster.count * 2}
+                  className="map-cluster"
+                  pathOptions={{ color: '#f43f5e', fillColor: '#f43f5e', fillOpacity: 0.2 }}
+                >
+                  <Tooltip>
+                    <div className="text-sm font-medium text-gray-900">{cluster.names.join(', ')}</div>
+                    <div className="text-xs text-gray-600">{cluster.count} spot{cluster.count > 1 ? 's' : ''}</div>
+                    <div className="text-xs text-rose-500">{Array.from(cluster.tags).slice(0, 3).join(', ')}</div>
+                  </Tooltip>
+                </CircleMarker>
+              ))}
+            </MapContainer>
+          </div>
+        </Card>
+      )}
+
+      {!isLoading && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {places.map((place) => (
             <Card key={place.id} className="overflow-hidden">
@@ -90,7 +136,7 @@ export default function Places() {
                 </div>
                 <div className="md:w-1/2 h-48 rounded-lg overflow-hidden border">
                   {place.latitude && place.longitude ? (
-                    <Map lat={place.latitude} lng={place.longitude} className="h-48" />
+                    <MapEmbed lat={place.latitude} lng={place.longitude} className="h-48" />
                   ) : (
                     <div className="h-full w-full bg-gray-100 grid place-items-center text-sm text-gray-500">
                       Location coming soon
@@ -125,4 +171,29 @@ function openMap(place: Place) {
     const url = `https://www.google.com/maps/search/?api=1&query=${place.latitude},${place.longitude}(${query})`;
     window.open(url, '_blank', 'noopener');
   }
+}
+
+function clusterPlaces(places: Place[]) {
+  const map = new Map<string, { lat: number; lng: number; count: number; tags: Set<string>; names: string[] }>();
+  places.forEach((place) => {
+    if (typeof place.latitude !== 'number' || typeof place.longitude !== 'number') return;
+    const key = `${place.latitude.toFixed(2)}-${place.longitude.toFixed(2)}`;
+    const entry = map.get(key) ?? {
+      lat: place.latitude,
+      lng: place.longitude,
+      count: 0,
+      tags: new Set<string>(),
+      names: [],
+    };
+    entry.count += 1;
+    entry.names.push(place.name);
+    const tags = Array.isArray(place.tags)
+      ? place.tags
+      : typeof place.tags === 'string'
+        ? place.tags.split(',').map((tag) => tag.trim()).filter(Boolean)
+        : [];
+    tags.forEach((tag) => entry.tags.add(tag));
+    map.set(key, entry);
+  });
+  return Array.from(map.values());
 }

@@ -24,7 +24,7 @@ class AvailabilityBase(BaseModel):
 
 
 class AvailabilityCreate(AvailabilityBase):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = Field(default=None, min_length=1)
 
 
 class AvailabilityRead(AvailabilityBase):
@@ -55,7 +55,7 @@ class MeetingSuggestionResponse(BaseModel):
 
 
 class MeetingConfirmationRequest(BaseModel):
-    user_id: str = Field(..., min_length=1)
+    user_id: str | None = Field(default=None, min_length=1)
     start_time: datetime
     end_time: datetime
     title: Optional[str] = Field(None, max_length=200)

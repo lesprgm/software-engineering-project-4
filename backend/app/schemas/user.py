@@ -1,24 +1,53 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, validator
 
 
 class UserBase(BaseModel):
     email: EmailStr
-    display_name: str
+    display_name: str = Field(..., min_length=1, max_length=120)
 
 
-class UserCreate(UserBase):
-    pass
+class UserProfileFields(BaseModel):
+    bio: Optional[str] = Field(default=None, max_length=2000)
+    interests: Optional[List[str]] = None
+    photos: Optional[List[str]] = None
+    pronouns: Optional[str] = Field(default=None, max_length=60)
+    location: Optional[str] = Field(default=None, max_length=120)
+
+    @validator("interests", "photos", pre=True)
+    def normalize_list(cls, value):
+        if value is None:
+            return value
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, str) and item.strip()]
+        return value
 
 
-class UserRead(UserBase):
+class UserCreate(UserBase, UserProfileFields):
+    password: Optional[str] = Field(default=None, min_length=8, max_length=64)
+
+
+class UserProfileRead(UserBase, UserProfileFields):
     id: str
     created_at: datetime
 
     class Config:
         orm_mode = True
+
+
+class UserProfileUpdate(UserProfileFields):
+    display_name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+
+
+class PhotoUploadResponse(BaseModel):
+    url: str
+    photos: List[str]
+
+
+class UserRead(UserProfileRead):
+    """Backward-compatible schema for modules that expect UserRead."""
 
 
 class UserMatchCandidate(BaseModel):

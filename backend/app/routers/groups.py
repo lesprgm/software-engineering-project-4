@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from ..database import get_db
+from ..dependencies.auth import get_optional_user
+from ..models.user import User
 from ..schemas.group import (
     GroupCreate,
     GroupDetail,
@@ -30,13 +32,28 @@ from ..services.scheduling import AvailabilityService, SchedulingService
 router = APIRouter(prefix="/groups", tags=["groups"])
 
 
+def _resolve_user_id(provided: str | None, actor: User | None) -> str:
+    if actor:
+        if provided and provided != actor.id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User mismatch")
+        return actor.id
+    if not provided:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
+    return provided
+
+
 @router.post("/", response_model=GroupRead, status_code=status.HTTP_201_CREATED)
-def create_group(payload: GroupCreate, db: Session = Depends(get_db)) -> GroupRead:
+def create_group(
+    payload: GroupCreate,
+    db: Session = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
+) -> GroupRead:
+    owner_id = _resolve_user_id(payload.owner_id, actor)
     group = GroupService.create_group(
         db,
         name=payload.name,
         description=payload.description,
-        owner_id=payload.owner_id,
+        owner_id=owner_id,
     )
     db.commit()
     return group
@@ -59,11 +76,13 @@ def join_group(
     group_id: str,
     payload: JoinGroupRequest,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
 ) -> GroupDetail:
+    user_id = _resolve_user_id(payload.user_id, actor)
     group = GroupService.join_group(
         db,
         group_id=group_id,
-        user_id=payload.user_id,
+        user_id=user_id,
         invite_code=payload.invite_code,
     )
     db.commit()
@@ -86,11 +105,13 @@ def post_message(
     group_id: str,
     payload: GroupMessageCreate,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
 ) -> GroupMessageRead:
+    user_id = _resolve_user_id(payload.user_id, actor)
     message = GroupService.post_message(
         db,
         group_id=group_id,
-        user_id=payload.user_id,
+        user_id=user_id,
         content=payload.content,
     )
     db.commit()
@@ -118,11 +139,13 @@ def add_availability(
     group_id: str,
     payload: AvailabilityCreate,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
 ) -> AvailabilityRead:
+    user_id = _resolve_user_id(payload.user_id, actor)
     record = AvailabilityService.add_window(
         db,
         group_id=group_id,
-        user_id=payload.user_id,
+        user_id=user_id,
         start_time=payload.start_time,
         end_time=payload.end_time,
         timezone_name=payload.timezone,
@@ -164,13 +187,15 @@ def confirm_meeting(
     group_id: str,
     payload: MeetingConfirmationRequest,
     db: Session = Depends(get_db),
+    actor: User | None = Depends(get_optional_user),
 ) -> GroupMeetingRead:
+    user_id = _resolve_user_id(payload.user_id, actor)
     meeting = SchedulingService.confirm_meeting(
         db,
         group_id=group_id,
         scheduled_start=payload.start_time,
         scheduled_end=payload.end_time,
-        suggested_by=payload.user_id,
+        suggested_by=user_id,
         note=payload.title,
     )
     db.commit()

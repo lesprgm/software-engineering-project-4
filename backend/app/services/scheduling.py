@@ -123,34 +123,45 @@ class SchedulingService:
         if not member_ids:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group has no members")
 
-        window_start = datetime.now(timezone.utc)
-        window_end = window_start + timedelta(days=prefs.window_days)
-
-        availabilities = (
-            db.execute(
-                select(Availability)
-                .where(Availability.group_id == group_id)
-                .where(Availability.start_time < window_end)
-                .where(Availability.end_time > window_start)
-            )
+        raw_availabilities = (
+            db.execute(select(Availability).where(Availability.group_id == group_id))
             .scalars()
             .all()
         )
+        if not raw_availabilities:
+            return []
 
-        if not availabilities:
+        now_utc = datetime.now(timezone.utc)
+        earliest_start = min(_ensure_utc(avail.start_time) for avail in raw_availabilities)
+        window_start = min(now_utc, earliest_start)
+        window_end = window_start + timedelta(days=prefs.window_days)
+
+        normalized_entries = []
+        for avail in raw_availabilities:
+            start = _ensure_utc(avail.start_time)
+            end = _ensure_utc(avail.end_time)
+            if start < window_end and end > window_start:
+                normalized_entries.append((avail.user_id, start, end))
+
+        if not normalized_entries:
             return []
 
         windows = []
-        for avail in availabilities:
-            start = _ensure_utc(avail.start_time)
-            end = _ensure_utc(avail.end_time)
+        for user_id, start, end in normalized_entries:
+            clamped_start = max(start, window_start)
+            clamped_end = min(end, window_end)
+            if clamped_end <= clamped_start:
+                continue
             windows.append(
                 AvailabilityWindow(
-                    start=max(start, window_start),
-                    end=min(end, window_end),
-                    user_id=avail.user_id,
+                    start=clamped_start,
+                    end=clamped_end,
+                    user_id=user_id,
                 )
             )
+
+        if not windows:
+            return []
 
         duration = timedelta(minutes=prefs.duration_minutes)
         suggestions = SchedulingService._collect_conflict_free_windows(

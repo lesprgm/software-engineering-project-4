@@ -22,6 +22,8 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
   const [dragging, setDragging] = useState(false);
   const [leaving, setLeaving] = useState<null | 'left' | 'right'>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
+  const velocityRef = useRef(0);
+  const lastMove = useRef<{ x: number; time: number } | null>(null);
   const threshold = 120;
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -35,6 +37,12 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     if (!start.current || disabled || leaving) return;
     const nx = e.clientX - start.current.x;
     const ny = e.clientY - start.current.y;
+    const now = performance.now();
+    if (lastMove.current) {
+      const dt = Math.max(8, now - lastMove.current.time);
+      velocityRef.current = (nx - lastMove.current.x) / dt;
+    }
+    lastMove.current = { x: nx, time: now };
     setDx(nx);
     setDy(ny);
   };
@@ -43,6 +51,8 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     setDragging(false);
     setDx(0);
     setDy(0);
+    velocityRef.current = 0;
+    lastMove.current = null;
     start.current = null;
   }, []);
 
@@ -60,24 +70,33 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
     swipeLeft: () => {
       if (disabled || leaving) return;
       setLeaving('left');
+      velocityRef.current = -2;
       window.setTimeout(() => {
         onSwipe?.('left');
         setLeaving(null);
         setDx(0); setDy(0);
+        velocityRef.current = 0;
       }, 260);
     },
     swipeRight: () => {
       if (disabled || leaving) return;
       setLeaving('right');
+      velocityRef.current = 2;
       window.setTimeout(() => {
         onSwipe?.('right');
         setLeaving(null);
         setDx(0); setDy(0);
+        velocityRef.current = 0;
       }, 260);
     },
   }));
 
-  const rotate = leaving ? (leaving === 'right' ? 15 : -15) : Math.max(-15, Math.min(15, dx / 10));
+  const velocityTilt = Math.max(-8, Math.min(8, velocityRef.current * 120));
+  const rotate = leaving
+    ? leaving === 'right'
+      ? 18
+      : -18
+    : Math.max(-18, Math.min(18, dx / 12 + velocityTilt));
   const style = leaving
     ? { transform: `translate(${leaving === 'right' ? 500 : -500}px, 0px) rotate(${rotate}deg)`, transition: 'transform 250ms ease' as const }
     : dragging
@@ -99,8 +118,28 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       role="group"
       aria-roledescription="swipeable card"
     >
-      <div style={style} className="will-change-transform">
+      <div style={style} className="will-change-transform relative rounded-2xl overflow-hidden">
         {children}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-150"
+          style={{
+            opacity: likeOpacity * 0.7,
+            background:
+              'radial-gradient(circle at 20% 20%, rgba(34,197,94,0.35), transparent 60%), linear-gradient(120deg, rgba(34,197,94,0.25), transparent)',
+            mixBlendMode: 'screen',
+          }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-150"
+          style={{
+            opacity: nopeOpacity * 0.65,
+            background:
+              'radial-gradient(circle at 80% 20%, rgba(239,68,68,0.4), transparent 55%), linear-gradient(240deg, rgba(239,68,68,0.3), transparent)',
+            mixBlendMode: 'multiply',
+          }}
+        />
       </div>
       {/* Overlays */}
       <div

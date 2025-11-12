@@ -1,8 +1,10 @@
-import { useNavigate } from 'react-router-dom';
 import Button from '../components/ui/Button';
+import { useViewNavigate } from '../hooks/useViewNavigate';
+import { useBreadcrumb } from '../hooks/useBreadcrumb';
 
 export default function Choose() {
-  const navigate = useNavigate();
+  const navigate = useViewNavigate();
+  useBreadcrumb('Home');
 
   const go = (type: 'user' | 'group') => {
     navigate(`/matches?type=${type}`);

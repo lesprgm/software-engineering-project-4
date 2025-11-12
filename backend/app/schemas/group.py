@@ -24,7 +24,7 @@ class GroupBase(BaseModel):
 
 
 class GroupCreate(GroupBase):
-    owner_id: str = Field(..., description="Identifier for the user creating the group")
+    owner_id: str | None = Field(default=None, description="Identifier for the user creating the group")
 
 
 class GroupRead(GroupBase):
@@ -53,7 +53,7 @@ class GroupDetail(GroupRead):
 
 
 class JoinGroupRequest(BaseModel):
-    user_id: str
+    user_id: str | None = None
     invite_code: str = Field(..., min_length=1)
 
 
@@ -74,7 +74,7 @@ class GroupMatchResponse(BaseModel):
 
 
 class GroupMessageCreate(BaseModel):
-    user_id: str
+    user_id: str | None = None
     content: str = Field(..., min_length=1, max_length=1000)
 
     @validator('content')

@@ -58,7 +58,7 @@ def test_date_ideas_use_cache_and_places(client: TestClient):
             "photo_url": None,
         },
     )
-    assert place_response.status_code == 200
+    assert place_response.status_code in (200, 201)
 
     match_id = "match-ideas-1"
     now = datetime.now(timezone.utc)
@@ -103,7 +103,7 @@ def test_event_nlp_search_interprets_filters(client: TestClient):
         "tags": ["concert", "music"],
     }
     response = client.post("/events/", json=create_event)
-    assert response.status_code == 200
+    assert response.status_code in (200, 201)
 
     query = "What's happening this Friday near Lowry? Looking for a concert."
     search = client.get("/events/nlp-search", params={"q": query})

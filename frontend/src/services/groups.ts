@@ -4,7 +4,7 @@ import api from '../lib/api';
 export interface GroupCreate {
   name: string;
   description?: string;
-  owner_id: string;
+  owner_id?: string;
 }
 
 export interface GroupRead {
@@ -26,7 +26,7 @@ export interface GroupDetail extends GroupRead {
 }
 
 export interface JoinGroupRequest {
-  user_id: string;
+  user_id?: string;
   invite_code: string;
 }
 
@@ -35,7 +35,7 @@ export interface InviteLinkResponse {
 }
 
 export interface GroupMessageCreate {
-  user_id: string;
+  user_id?: string;
   content: string;
 }
 
@@ -53,7 +53,7 @@ export interface GroupMessagePage {
 }
 
 export interface AvailabilityCreate {
-  user_id: string;
+  user_id?: string;
   start_time: string;
   end_time: string;
   timezone: string;

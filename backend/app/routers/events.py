@@ -29,6 +29,15 @@ def create_event(payload: EventCreate, db: Session = Depends(get_db)) -> EventRe
     db.refresh(event)
     return event
 
+router.add_api_route(
+    "",
+    create_event,
+    methods=["POST"],
+    response_model=EventRead,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+
 
 @router.get("/", response_model=list[EventRead])
 def list_events(
@@ -37,16 +46,57 @@ def list_events(
     location: str | None = Query(None),
     category: str | None = Query(None),
     viewer_id: str | None = Query(None),
+    upcoming: bool | None = Query(
+        None,
+        description="Legacy flag: when true, return future events only.",
+    ),
     db: Session = Depends(get_db),
 ) -> list[EventRead]:
+    now = datetime.now(timezone.utc)
+    computed_start = start_time
+    if upcoming is True:
+        computed_start = max(start_time or now, now)
     filters = EventQueryFilters(
-        start_time=start_time,
+        start_time=computed_start,
         end_time=end_time,
         location=location,
         category=category,
     )
     events = EventService.list_events(db, filters=filters, viewer_id=viewer_id)
     return events
+
+router.add_api_route(
+    "",
+    list_events,
+    methods=["GET"],
+    response_model=list[EventRead],
+    include_in_schema=False,
+)
+
+
+@router.get("/nlp-search", response_model=EventNLPResponse)
+def nlp_event_search(
+    q: str = Query(..., description="Natural-language search query"),
+    refresh: bool = Query(False),
+    viewer_id: str | None = Query(None),
+    db: Session = Depends(get_db),
+) -> EventNLPResponse:
+    filters, events, cached, interpreted = AIService.interpret_event_query(
+        db,
+        q,
+        refresh=refresh,
+        viewer_id=viewer_id,
+    )
+    if not cached:
+        db.commit()
+    return EventNLPResponse(
+        query=q,
+        filters=filters,
+        events=events,
+        cached=cached,
+        interpreted_query=interpreted,
+        generated_at=datetime.now(timezone.utc),
+    )
 
 
 @router.get("/{event_id}", response_model=EventRead)
@@ -110,26 +160,28 @@ def get_interest(
     return EventInterestRead(event_id=event_id, user_id=user_id, interested=interest.interested)
 
 
-@router.get("/nlp-search", response_model=EventNLPResponse)
-def nlp_event_search(
-    q: str = Query(..., description="Natural-language search query"),
-    refresh: bool = Query(False),
-    viewer_id: str | None = Query(None),
+@router.post(
+    "/{event_id}/interests",
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False,
+)
+def legacy_toggle_interest(
+    event_id: int,
+    payload: EventInterestRequest,
     db: Session = Depends(get_db),
-) -> EventNLPResponse:
-    filters, events, cached, interpreted = AIService.interpret_event_query(
+):
+    current = EventService.get_interest(db, event_id, payload.user_id)
+    desired = True if current is None else not current.interested
+    interest = EventService.set_interest(
         db,
-        q,
-        refresh=refresh,
-        viewer_id=viewer_id,
+        event_id,
+        EventInterestRequest(user_id=payload.user_id, interested=desired),
     )
-    if not cached:
-        db.commit()
-    return EventNLPResponse(
-        query=q,
-        filters=filters,
-        events=events,
-        cached=cached,
-        interpreted_query=interpreted,
-        generated_at=datetime.now(timezone.utc),
-    )
+    db.commit()
+    count = EventService.interest_count(db, event_id)
+    return {
+        "event_id": event_id,
+        "user_id": payload.user_id,
+        "interested": interest.interested,
+        "interested_count": count,
+    }

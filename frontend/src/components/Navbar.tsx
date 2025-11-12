@@ -1,8 +1,8 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/auth';
+import NotificationBell from './NotificationBell';
+import { ViewTransitionLink, ViewTransitionNavLink } from './navigation/ViewTransitionLink';
 
 export default function Navbar() {
-  const navigate = useNavigate();
   const token = useAuthStore((s) => s.token);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -11,21 +11,43 @@ export default function Navbar() {
   return (
     <header className="bg-white border-b">
       <div className="container mx-auto max-w-6xl px-4 h-16 flex items-center justify-between">
-        <Link to={token ? '/' : '/'} className="font-semibold text-xl">Campus Connect</Link>
+        <ViewTransitionLink to={token ? '/' : '/'} className="font-semibold text-xl">
+          Campus Connect
+        </ViewTransitionLink>
         <nav className="flex items-center gap-2">
           {token ? (
             <>
-              <NavLink to="/" className={linkClass}>Matches</NavLink>
-              <NavLink to="/events" className={linkClass}>Events</NavLink>
-              <NavLink to="/places" className={linkClass}>Places</NavLink>
-              <NavLink to="/dates" className={linkClass}>Dates</NavLink>
-              <NavLink to="/messages" className={linkClass}>Messages</NavLink>
-              <NavLink to="/profile" className={linkClass}>Profile</NavLink>
+              <ViewTransitionNavLink to="/matches" className={linkClass}>
+                Matches
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/groups" className={linkClass}>
+                Groups
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/events" className={linkClass}>
+                Events
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/places" className={linkClass}>
+                Places
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/dates" className={linkClass}>
+                Dates
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/messages" className={linkClass}>
+                Messages
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/profile" className={linkClass}>
+                Profile
+              </ViewTransitionNavLink>
+              <NotificationBell />
             </>
           ) : (
             <>
-              <NavLink to="/login" className={linkClass}>Login</NavLink>
-              <NavLink to="/signup" className={linkClass}>Signup</NavLink>
+              <ViewTransitionNavLink to="/login" className={linkClass}>
+                Login
+              </ViewTransitionNavLink>
+              <ViewTransitionNavLink to="/signup" className={linkClass}>
+                Signup
+              </ViewTransitionNavLink>
             </>
           )}
         </nav>
