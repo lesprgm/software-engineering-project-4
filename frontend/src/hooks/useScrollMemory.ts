@@ -3,6 +3,27 @@ import { useLocation, useNavigationType } from 'react-router-dom';
 
 const scrollPositions = new Map<string, number>();
 
+function safeScroll(top: number) {
+  if (typeof window === 'undefined') return;
+  if (typeof window.scrollTo === 'function') {
+    const fnSource = window.scrollTo.toString();
+    if (!/notImplemented/.test(fnSource)) {
+      window.scrollTo({ top, left: 0, behavior: 'auto' });
+      return;
+    }
+  }
+  if (typeof window.scroll === 'function') {
+    const fnSource = window.scroll.toString();
+    if (!/notImplemented/.test(fnSource)) {
+      try {
+        window.scroll(0, top);
+      } catch {
+        // ignore in non-browser envs
+      }
+    }
+  }
+}
+
 export function useScrollMemory() {
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -19,13 +40,9 @@ export function useScrollMemory() {
     const key = location.key || location.pathname;
     const stored = scrollPositions.get(key);
     if (stored != null) {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: stored, left: 0, behavior: 'auto' });
-      }
+      safeScroll(stored);
     } else if (navigationType !== 'POP') {
-      if (typeof window !== 'undefined') {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      }
+      safeScroll(0);
     }
   }, [location, navigationType]);
 

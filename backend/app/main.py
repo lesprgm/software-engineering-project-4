@@ -8,7 +8,8 @@ import logging
 from sqlalchemy import text
 
 from .config import get_settings
-from .database import Base, engine
+from .database import Base, SessionLocal, engine
+from .services.events import EventService
 from app.routers import ai, auth, direct_messages, events, groups, matches, places, users
 
 # Configure logging
@@ -25,13 +26,41 @@ Base.metadata.create_all(bind=engine)
 
 
 def apply_schema_patches() -> None:
+    def get_columns(conn, table: str) -> set[str]:
+        rows = conn.execute(text(f"PRAGMA table_info('{table}')")).fetchall()
+        return {row[1] for row in rows}
+
     with engine.begin() as connection:
-        columns = [row[1] for row in connection.execute(text("PRAGMA table_info('places')"))]
-        if 'review_count' not in columns:
+        place_columns = get_columns(connection, "places")
+        if "review_count" not in place_columns:
             connection.execute(text("ALTER TABLE places ADD COLUMN review_count INTEGER DEFAULT 0"))
+
+        event_columns = get_columns(connection, "events")
+        if "created_at" not in event_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE events ADD COLUMN created_at DATETIME NOT NULL DEFAULT (datetime('now'))"
+                )
+            )
+
+        if "updated_at" not in event_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE events ADD COLUMN updated_at DATETIME NOT NULL DEFAULT (datetime('now'))"
+                )
+            )
 
 
 apply_schema_patches()
+def seed_default_records() -> None:
+    session = SessionLocal()
+    try:
+        EventService.seed_defaults(session)
+    finally:
+        session.close()
+
+
+seed_default_records()
 media_path = Path(settings.media_root).resolve()
 media_path.mkdir(parents=True, exist_ok=True)
 

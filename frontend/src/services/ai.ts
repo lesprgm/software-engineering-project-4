@@ -91,6 +91,16 @@ export interface EventNlpResponse {
   generated_at: string;
 }
 
+export interface DirectChatRequest {
+  user_name: string;
+  partner_name: string;
+  message: string;
+}
+
+export interface DirectChatResponse {
+  reply_text: string;
+}
+
 export const aiApi = {
   getMatchInsight: (matchId: string, refresh = false) =>
     api.get<MatchInsightResponse>(`/matches/${matchId}/insight`, {
@@ -119,4 +129,6 @@ export const aiApi = {
         ...(viewerId ? { viewer_id: viewerId } : {}),
       },
     }),
+  sendDirectMessage: (payload: DirectChatRequest) =>
+    api.post<DirectChatResponse>('/chat/direct', payload),
 };

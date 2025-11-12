@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -10,6 +10,35 @@ from ..schemas.events import EventCreate, EventInterestRequest, EventQueryFilter
 
 
 class EventService:
+    _SEED_EVENTS = [
+        {
+            "title": "Hack Night",
+            "description": "Bring your laptop for a collaborative late-night build sprint with snacks and lo-fi playlists.",
+            "location": "Innovation Lab",
+            "category": "tech",
+            "offset_hours": 24,
+            "duration_hours": 4,
+            "tags": ["tech", "coding"],
+        },
+        {
+            "title": "Campus Sunset Picnic",
+            "description": "Meet by the quad for chill vibes, board games, and sunset photos.",
+            "location": "South Quad Lawn",
+            "category": "social",
+            "offset_hours": 48,
+            "duration_hours": 2,
+            "tags": ["outdoors", "picnic"],
+        },
+        {
+            "title": "Open Mic & Coffee",
+            "description": "Acoustic performances, poetry, and $2 espresso flights all evening.",
+            "location": "Campus Cafe",
+            "category": "music",
+            "offset_hours": 72,
+            "duration_hours": 3,
+            "tags": ["music", "coffee"],
+        },
+    ]
 
     @staticmethod
     def _serialize_tags(tags: list[str] | None) -> str | None:
@@ -148,3 +177,30 @@ class EventService:
             )
             .scalar_one()
         )
+
+    @classmethod
+    def seed_defaults(cls, db: Session) -> None:
+        existing = db.execute(select(func.count(Event.id))).scalar_one()
+        if existing:
+            return
+        now = datetime.now(timezone.utc)
+        for idx, template in enumerate(cls._SEED_EVENTS):
+            start = now + timedelta(hours=template["offset_hours"])
+            end = start + timedelta(hours=template["duration_hours"])
+            event = Event(
+                title=template["title"],
+                description=template["description"],
+                location=template["location"],
+                category=template["category"],
+                start_time=start,
+                end_time=end,
+                tags=cls._serialize_seed_tags(template.get("tags")),
+            )
+            db.add(event)
+        db.commit()
+
+    @staticmethod
+    def _serialize_seed_tags(tags: list[str] | None) -> str | None:
+        if not tags:
+            return None
+        return ",".join(tags)

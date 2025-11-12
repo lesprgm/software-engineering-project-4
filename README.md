@@ -37,7 +37,7 @@ A web application that connects college students looking for friends, relationsh
 * SQLAlchemy ORM
 * JWT-based authentication
 * Local file storage for images (`/uploads` directory)
-* Optional AI API integration (OpenAI or Gemini)
+* Optional AI API integration (Gemini 2.5 Flash)
 
 ---
 
@@ -176,6 +176,6 @@ Access the app at:
 ## Notes for Class Project
 
 * Local image uploads will be saved under `backend/app/uploads/`.
-* AI features (match insights, ideas, event search) can call OpenAI or Gemini APIs through backend wrappers.
+* AI features (match insights, ideas, event search) call Gemini 2.5 Flash through backend wrappers (mocked locally if no key is set).
 * SQLite is fine for local testing; you can switch to PostgreSQL if desired.
 * Prioritize completing core features over scaling or deployment.

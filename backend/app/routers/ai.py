@@ -7,6 +7,8 @@ from ..database import get_db
 from ..schemas.ai import (
     DateIdeaRequest,
     DateIdeasResponse,
+    DirectChatRequest,
+    DirectChatResponse,
     MatchInsightRequest,
     MatchInsightResponse,
 )
@@ -84,3 +86,9 @@ def list_date_ideas(
         cached=cached,
         generated_at=generated_at,
     )
+
+
+@router.post("/chat/direct", response_model=DirectChatResponse)
+def chat_with_ai(request: DirectChatRequest) -> DirectChatResponse:
+    reply = AIService.generate_direct_reply(request)
+    return DirectChatResponse(reply_text=reply)

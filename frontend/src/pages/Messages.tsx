@@ -8,14 +8,22 @@ import { useNotifications } from '../store/notifications';
 import { groupsApi } from '../services/groups';
 import { useGroups, useUserMatches } from '../hooks/useGroups';
 import { useBreadcrumb } from '../hooks/useBreadcrumb';
-import { directMessagesService } from '../services/directMessages';
+import { aiApi } from '../services/ai';
 
-type Message = {
+type GroupMessage = {
   id: number | string;
   group_id: string;
   user_id?: string;
   content: string;
   created_at: string;
+};
+
+type DirectEntry = {
+  id: string;
+  senderId: string;
+  content: string;
+  createdAt: string;
+  role?: 'system';
 };
 
 type ViewMode = 'groups' | 'direct';
@@ -64,20 +72,13 @@ export default function Messages() {
     enabled: !!activeGroupId && mode === 'groups',
     queryFn: async () => {
       const response = await groupsApi.listMessages(activeGroupId!, 100, 0);
-      return response.data.messages as Message[];
+      return response.data.messages as GroupMessage[];
     },
     refetchInterval: 5000,
   });
 
-  const directMessagesQ = useQuery({
-    queryKey: ['direct-messages', activeDirectId],
-    enabled: !!activeDirectId && mode === 'direct',
-    queryFn: async () => {
-      const messages = await directMessagesService.list(activeDirectId!, 100);
-      return messages;
-    },
-    refetchInterval: 5000,
-  });
+  const [directThreads, setDirectThreads] = useState<Record<string, DirectEntry[]>>({});
+  const [aiTyping, setAiTyping] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -89,7 +90,7 @@ export default function Messages() {
     if (directScrollRef.current) {
       directScrollRef.current.scrollTop = directScrollRef.current.scrollHeight;
     }
-  }, [directMessagesQ.data]);
+  }, [directThreads, activeDirectId]);
 
   const send = useMutation({
     mutationFn: async (content: string) => {
@@ -120,21 +121,97 @@ export default function Messages() {
     [matches, activeDirectId, mode],
   );
 
+  const directMessages = useMemo(() => {
+    if (!activeDirectId) return [] as DirectEntry[];
+    return directThreads[activeDirectId] || [];
+  }, [directThreads, activeDirectId]);
+  const isAiResponding = activeDirectId ? !!aiTyping[activeDirectId] : false;
+
+  useEffect(() => {
+    if (!activeDirectId || !activeDirect) return;
+    setDirectThreads((prev) => {
+      if (prev[activeDirectId]) return prev;
+      const intro: DirectEntry = {
+        id: `${activeDirectId}-intro`,
+        senderId: activeDirectId,
+        content: `Hey! I'm ${activeDirect.display_name || activeDirect.name}. I'm powered by Gemini, so feel free to bounce ideas off me.`,
+        createdAt: new Date().toISOString(),
+      };
+      return { ...prev, [activeDirectId]: [intro] };
+    });
+  }, [activeDirectId, activeDirect]);
+
+  const appendDirectEntry = (partnerId: string, entry: DirectEntry) => {
+    setDirectThreads((prev) => {
+      const history = prev[partnerId] ?? [];
+      return { ...prev, [partnerId]: [...history, entry] };
+    });
+  };
+
   const sendDirect = useMutation({
-    mutationFn: async (content: string) => {
-      if (!activeDirectId) throw new Error('Missing direct recipient');
-      return directMessagesService.send(activeDirectId, content);
+    mutationFn: async (variables: { partnerId: string; partnerName: string; message: string }) => {
+      if (!me?.id) {
+        throw new Error('You need to be logged in to chat.');
+      }
+      return aiApi.sendDirectMessage({
+        user_name: me.displayName || me.name || 'You',
+        partner_name: variables.partnerName || 'Gemini',
+        message: variables.message,
+      });
     },
-    onSuccess: async () => {
-      directInputRef.current && (directInputRef.current.value = '');
-      await qc.invalidateQueries({ queryKey: ['direct-messages', activeDirectId] });
-      if (activeDirect) {
-        addNotification({
-          kind: 'message',
-          title: 'Message sent',
-          body: `Shared with ${activeDirect.display_name || 'match'}.`,
+    onMutate: (variables) => {
+      if (!me?.id) return;
+      const entry: DirectEntry = {
+        id: `user-${variables.partnerId}-${Date.now()}`,
+        senderId: me.id,
+        content: variables.message,
+        createdAt: new Date().toISOString(),
+      };
+      appendDirectEntry(variables.partnerId, entry);
+      setAiTyping((prev) => ({ ...prev, [variables.partnerId]: true }));
+      if (directInputRef.current) {
+        directInputRef.current.value = '';
+      }
+    },
+    onSuccess: (response, variables) => {
+      const reply = response.data.reply_text || 'Thinking...';
+      const entry: DirectEntry = {
+        id: `ai-${variables.partnerId}-${Date.now()}`,
+        senderId: variables.partnerId,
+        content: reply,
+        createdAt: new Date().toISOString(),
+      };
+      appendDirectEntry(variables.partnerId, entry);
+      addNotification({
+        kind: 'message',
+        title: 'Gemini replied',
+        body: `Shared with ${variables.partnerName || 'your match'}.`,
+      });
+    },
+    onError: (_error, variables) => {
+      const partnerId = variables?.partnerId;
+      if (partnerId) {
+        appendDirectEntry(partnerId, {
+          id: `system-${partnerId}-${Date.now()}`,
+          senderId: partnerId,
+          role: 'system',
+          content: 'We could not reach Gemini. Try again in a moment.',
+          createdAt: new Date().toISOString(),
         });
       }
+      addNotification({
+        kind: 'error',
+        title: 'Message failed',
+        body: 'Gemini could not reply. Please try again.',
+      });
+    },
+    onSettled: (_data, _error, variables) => {
+      if (!variables) return;
+      setAiTyping((prev) => {
+        const next = { ...prev };
+        delete next[variables.partnerId];
+        return next;
+      });
     },
   });
 
@@ -240,14 +317,14 @@ export default function Messages() {
                 {activeDirect ? activeDirect.display_name : 'Select a match'}
               </div>
               <div ref={directScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
-                {directMessagesQ.data?.map((message) => {
+                {directMessages.map((message) => {
                   const mine = message.senderId === me?.id;
                   return (
                     <div key={message.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[70%] rounded-lg px-3 py-2 text-sm shadow ${mine ? 'bg-purple-600 text-white' : 'bg-white'}`}>
                         {!mine && (
                           <div className="text-xs font-semibold text-gray-500 mb-0.5">
-                            {activeDirect?.display_name || 'Match'}
+                            {message.role === 'system' ? 'System' : activeDirect?.display_name || 'Gemini'}
                           </div>
                         )}
                         <div>{message.content}</div>
@@ -258,8 +335,15 @@ export default function Messages() {
                     </div>
                   );
                 })}
-                {!directMessagesQ.data?.length && activeDirect && (
+                {!directMessages.length && activeDirect && (
                   <div className="text-sm text-gray-500">No messages yet. Break the ice!</div>
+                )}
+                {isAiResponding && (
+                  <div className="flex justify-start">
+                    <div className="max-w-[70%] rounded-lg px-3 py-2 text-sm shadow bg-white text-gray-700 italic opacity-80">
+                      {activeDirect?.display_name || 'Gemini'} is crafting a reply…
+                    </div>
+                  </div>
                 )}
                 {!activeDirect && <div className="text-sm text-gray-500">Pick a match to start chatting.</div>}
               </div>
@@ -269,8 +353,20 @@ export default function Messages() {
                   onSubmit={(event) => {
                     event.preventDefault();
                     const value = directInputRef.current?.value?.trim();
-                    if (!value || !activeDirectId) return;
-                    sendDirect.mutate(value);
+                    if (!value || !activeDirectId || !activeDirect) return;
+                    if (!me?.id) {
+                      addNotification({
+                        kind: 'error',
+                        title: 'Login required',
+                        body: 'Sign in to chat with Gemini.',
+                      });
+                      return;
+                    }
+                    sendDirect.mutate({
+                      partnerId: activeDirectId,
+                      partnerName: activeDirect.display_name || 'Gemini',
+                      message: value,
+                    });
                   }}
                 >
                   <input

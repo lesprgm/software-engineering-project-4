@@ -15,6 +15,7 @@ from ..models import AICacheEntry, Event, MatchIdea, MatchInsight, Place
 from ..schemas.ai import (
     DateIdea,
     DateIdeaRequest,
+    DirectChatRequest,
     EventFilterDateRange,
     EventFilters,
     MatchInsightRequest,
@@ -162,6 +163,20 @@ class AIService:
         )
         events = cls._filter_events(db, filters, viewer_id=viewer_id)
         return filters, events, False, interpreted_query
+
+    @classmethod
+    def generate_direct_reply(cls, payload: DirectChatRequest) -> str:
+        prompt = (
+            "You are role-playing as {partner}. Respond in 2 sentences, warm and upbeat, "
+            "mentioning campus life when relevant. Student {user} says: \"{message}\""
+        ).format(partner=payload.partner_name, user=payload.user_name, message=payload.message)
+        try:
+            reply, _ = cls._generate_and_moderate(prompt)
+        except Exception:  # pragma: no cover - guardrail for unexpected provider issues
+            return cls._mock_direct_reply(payload)
+        if reply.startswith("[mock-ai-"):
+            return cls._mock_direct_reply(payload)
+        return reply.strip()
 
     # --- Match helpers -----------------------------------------------------------
     @classmethod
@@ -448,3 +463,22 @@ class AIService:
     @staticmethod
     def _snapshot_payload(payload: dict) -> dict:
         return json.loads(json.dumps(payload, default=str))
+
+    # --- Mock helpers -----------------------------------------------------------
+    @staticmethod
+    def _mock_direct_reply(payload: DirectChatRequest) -> str:
+        """Generate a friendly canned reply when Gemini is unavailable."""
+        subject = payload.message.strip() or "that idea"
+        if len(subject) > 80:
+            subject = subject[:77].rstrip() + "…"
+        user_first = (payload.user_name or "you").split()[0]
+        partner = payload.partner_name or "Gemini"
+        templates = [
+            "Hey {user}! {partner} here — I’m vibing with “{subject}.” Want me to line up a few campus spots to match that energy?",
+            "{partner} checking in! “{subject}” sounds like prime quad-stroll material. I can queue up ideas if you’d like, {user}.",
+            "Love that thought, {user}! If “{subject}” is the mood, I’ve got lounges and makerspaces in mind. Want me to shortlist a couple?",
+            "{partner} to the rescue: “{subject}” has coffee walk written all over it. Need recs near the union?",
+        ]
+        digest = int(sha256(f"{payload.user_name}:{payload.message}".encode("utf-8")).hexdigest(), 16)
+        template = templates[digest % len(templates)]
+        return template.format(user=user_first, partner=partner.split()[0], subject=subject)

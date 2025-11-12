@@ -18,6 +18,68 @@ import { getRuntimeEnv } from '../lib/env';
 const env = getRuntimeEnv();
 const FALLBACK_POSTER = `${env.BASE_URL ?? '/'}events/placeholder.svg`;
 
+const STATIC_EVENT_BLUEPRINTS = [
+  {
+    title: 'Sunset Rooftop Mixer',
+    description: 'Low-key beats, mocktails, and a Polaroid wall for new friends.',
+    location: 'Innovation Hub Rooftop',
+    category: 'social',
+    offsetHours: 4,
+    durationHours: 2,
+    tags: ['sunset', 'networking'],
+  },
+  {
+    title: 'Basement Beats & Boba',
+    description: 'Student DJs trade sets while boba pop-ups keep cups full.',
+    location: 'Union Underground',
+    category: 'music',
+    offsetHours: 22,
+    durationHours: 3,
+    tags: ['music', 'boba'],
+  },
+  {
+    title: 'Maker Lab Open Studio',
+    description: 'Try resin art, 3D printing demos, and communal playlist swaps.',
+    location: 'Maker Lab A120',
+    category: 'creative',
+    offsetHours: 36,
+    durationHours: 2,
+    tags: ['crafts', 'design'],
+  },
+  {
+    title: 'Trail & Chill Walk',
+    description: 'Slow-paced loop around the lake with mindfulness prompts and cocoa.',
+    location: 'Lakeside Trailhead',
+    category: 'outdoors',
+    offsetHours: 60,
+    durationHours: 1.5,
+    tags: ['outdoors', 'wellness'],
+  },
+] as const;
+
+function buildStaticEvents(): UiEvent[] {
+  const now = Date.now();
+  return STATIC_EVENT_BLUEPRINTS.map((template, index) => {
+    const start = new Date(now + template.offsetHours * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + template.durationHours * 60 * 60 * 1000);
+    return {
+      id: 5000 + index,
+      title: template.title,
+      description: template.description,
+      location: template.location,
+      category: template.category,
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      tags: template.tags.slice(),
+      image_url: null,
+      lat: null,
+      lng: null,
+      interest_count: 12 + index * 3,
+      viewer_interest: index === 0,
+    };
+  });
+}
+
 type UiEvent = {
   id: number;
   title: string;
@@ -154,9 +216,15 @@ export default function Events() {
         } satisfies EventsQueryState;
       } catch (error) {
         console.error('Unable to load events', error);
+        const offlineEvents = buildStaticEvents();
+        const filtered = trimmed
+          ? offlineEvents.filter((event) => event.title.toLowerCase().includes(trimmed.toLowerCase()))
+          : offlineEvents;
         return {
-          events: [],
-          interpretedQuery: 'Unable to load events.',
+          events: filtered,
+          interpretedQuery: trimmed
+            ? `Offline mode: showing curated picks similar to “${trimmed}”.`
+            : 'Showing campus-favorite spots while we reconnect to the live places service.',
           filters: null,
           error: true,
         } satisfies EventsQueryState;
@@ -227,7 +295,7 @@ export default function Events() {
 
       {loadError && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Unable to reach the events service. Showing any cached results.
+          We’re offline right now, so you’re seeing curated campus favorites.
         </div>
       )}
 

@@ -104,3 +104,13 @@ class EventNLPResponse(BaseModel):
     cached: bool = False
     interpreted_query: str
     generated_at: datetime
+
+
+class DirectChatRequest(BaseModel):
+    user_name: str = Field(..., min_length=1)
+    partner_name: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+
+class DirectChatResponse(BaseModel):
+    reply_text: str
