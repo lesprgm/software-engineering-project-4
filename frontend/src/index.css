@@ -13,9 +13,10 @@ html, body, #root {
 /* Full-bleed app background so page edges match section gradients */
 body {
   /* stronger but still tasteful gradient + soft highlights */
-  background: linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(191,219,254,0.10) 30%, rgba(187,247,208,0.08) 100%);
-  /* two faint radial highlights for added depth (left and right) */
-  background-image: linear-gradient(135deg, rgba(99,102,241,0.18) 0%, rgba(191,219,254,0.10) 30%, rgba(187,247,208,0.08) 100%), radial-gradient(900px 450px at 12% 18%, rgba(255,255,255,0.08), transparent 45%), radial-gradient(700px 350px at 88% 70%, rgba(255,255,255,0.04), transparent 40%);
+  /* pink / rose soft gradient */
+  background: linear-gradient(135deg, rgba(236,72,153,0.16) 0%, rgba(252,231,243,0.09) 30%, rgba(255,241,219,0.06) 100%);
+  /* two faint radial highlights for added depth (left and right) with soft pink tints */
+  background-image: linear-gradient(135deg, rgba(236,72,153,0.16) 0%, rgba(252,231,243,0.09) 30%, rgba(255,241,219,0.06) 100%), radial-gradient(900px 450px at 12% 18%, rgba(255,244,249,0.08), transparent 45%), radial-gradient(700px 350px at 88% 70%, rgba(255,249,247,0.04), transparent 40%);
   background-attachment: fixed;
 }
 

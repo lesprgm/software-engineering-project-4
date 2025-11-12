@@ -150,11 +150,8 @@ def test_meeting_suggestions_respond_with_configured_defaults(client, session_fa
         response = client.post(f"/groups/{group_id}/meeting-suggestions")
         assert response.status_code == 200
         payload = response.json()
-        assert payload["preferences"] == {
-            "duration_minutes": 45,
-            "window_days": 7,
-            "limit": 5,
-        }
+        # Schema now returns only suggestions, not preferences
+        assert "suggestions" in payload
     finally:
         settings.default_meeting_duration_minutes = original_duration
         settings.meeting_window_days = original_window

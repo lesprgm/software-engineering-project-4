@@ -2,7 +2,7 @@
 .DS_Store
 Thumbs.db
 .idea/
-.vscode/*
+.vscode/
 !.vscode/extensions.json
 
 # Logs
@@ -13,24 +13,91 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Node/Vite
+# Frontend build / caches
 node_modules/
-dist/
+frontend/node_modules/
+frontend/dist/
 .vite/
+frontend/.vite/
+frontend/node_modules/.vite/
+
+# Bundlers / caches
+dist/
+build/
 .cache/
 .turbo/
 .parcel-cache/
 
-# Testing/coverage
-coverage/
-.eslintcache
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Pip / build artifacts
+pip-wheel-metadata/
+__pypackages__/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+app.db
+*-journal
+*.sqlite-wal
+*.sqlite-shm
+*.db-journal
+
+# Uploaded files
+uploads/
+backend/app/uploads/
 
 # Env files (keep examples tracked)
 .env
 .env.*
+backend/.env
+backend/.env.local
+frontend/.env
+frontend/.env.local
+.env.local
+.secret
 !/.env.example
 !/frontend/.env.example
 !/frontend/.env.local.example
+!/backend/.env.example
+
+# Testing / coverage
+coverage/
+.eslintcache
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+coverage-html/
 
 # Build outputs / deploy
 *.local
@@ -39,4 +106,9 @@ coverage/
 # Misc
 *.swp
 *.swo
-
+*.lock
+.cache
+*~
+.project
+.classpath
+.settings/

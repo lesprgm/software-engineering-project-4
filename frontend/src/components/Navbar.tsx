@@ -6,7 +6,7 @@ export default function Navbar() {
   const token = useAuthStore((s) => s.token);
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`;
+    `px-3 py-2 rounded-md text-sm font-medium ${isActive ? 'bg-rose-600 text-white' : 'text-gray-700 hover:bg-gray-200'}`;
 
   return (
     <header className="bg-white border-b">
@@ -17,6 +17,7 @@ export default function Navbar() {
             <>
               <NavLink to="/" className={linkClass}>Matches</NavLink>
               <NavLink to="/events" className={linkClass}>Events</NavLink>
+              <NavLink to="/places" className={linkClass}>Places</NavLink>
               <NavLink to="/dates" className={linkClass}>Dates</NavLink>
               <NavLink to="/messages" className={linkClass}>Messages</NavLink>
               <NavLink to="/profile" className={linkClass}>Profile</NavLink>
