@@ -21,6 +21,11 @@ class Settings(BaseSettings):
         env="JWT_SECRET",
         description="Secret key used for JWT signing when auth is enabled.",
     )
+    allow_plain_dev_tokens: bool = Field(
+        default=True,
+        env="ALLOW_PLAIN_DEV_TOKENS",
+        description="Allow falling back to raw user IDs for dev-only tokens when JWT decoding fails.",
+    )
     default_meeting_duration_minutes: int = Field(
         default=60,
         description="Default meeting length used when the client omits a duration.",

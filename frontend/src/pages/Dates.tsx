@@ -264,7 +264,9 @@ export default function Dates() {
             )}
 
             <div className="space-y-2">
-              <div className="text-xs uppercase tracking-wide text-slate-400">Budget</div>
+              <label className="text-xs uppercase tracking-wide text-slate-400" htmlFor="budget-tier-slider">
+                Budget
+              </label>
               <input
                 type="range"
                 min={0}
@@ -272,6 +274,11 @@ export default function Dates() {
                 value={budgetTier}
                 onChange={(event) => setBudgetTier(Number(event.target.value))}
                 className="w-full accent-slate-900"
+                id="budget-tier-slider"
+                aria-valuemin={0}
+                aria-valuemax={BUDGET_LABELS.length - 1}
+                aria-valuenow={budgetTier}
+                aria-label="Budget preference"
               />
               <div className="flex justify-between text-[11px] text-slate-400">
                 {BUDGET_LABELS.map((label, idx) => (

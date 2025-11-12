@@ -129,8 +129,6 @@ export default function OnboardingWizard() {
     }
   };
 
-  const progress = ((step + 1) / 3) * 100;
-
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center px-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" aria-hidden />
@@ -144,9 +142,12 @@ export default function OnboardingWizard() {
             Skip
           </button>
         </div>
-        <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-4">
-          <div className="h-full bg-rose-500 transition-all" style={{ width: `${progress}%` }} aria-hidden />
-        </div>
+        <progress
+          value={step + 1}
+          max={3}
+          className="onboarding-progress mb-4"
+          aria-label="Onboarding progress"
+        />
         {renderStep()}
         <div className="mt-6 flex items-center justify-between">
           <Button variant="secondary" onClick={regress} disabled={step === 0}>

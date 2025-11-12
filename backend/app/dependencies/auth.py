@@ -66,6 +66,13 @@ def _b64decode(segment: str) -> bytes:
 
 def _resolve_user_id(token: str, settings: Settings) -> str:
     if settings.jwt_secret:
+        if token.count(".") != 2:
+            if settings.allow_plain_dev_tokens:
+                return token
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Malformed authentication token",
+            )
         payload = _decode_jwt(token, settings.jwt_secret)
         user_id = payload.get("sub")
         if not user_id:

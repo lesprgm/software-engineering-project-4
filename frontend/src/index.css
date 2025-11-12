@@ -125,10 +125,38 @@ html[data-scroll-dir='down'] {
 }
 
 .map-shell {
+  width: 100%;
+  height: 100%;
   animation: subtle-pop 0.45s ease-out;
 }
 .map-cluster {
   animation: subtle-pop 0.4s ease;
+}
+
+.onboarding-progress {
+  width: 100%;
+  height: 0.5rem;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 999px;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+.onboarding-progress::-webkit-progress-bar {
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+.onboarding-progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #fb7185, #f43f5e);
+  border-radius: 999px;
+}
+.onboarding-progress::-moz-progress-bar {
+  background: linear-gradient(90deg, #fb7185, #f43f5e);
+  border-radius: 999px;
+}
+
+.has-view-transition {
+  view-transition-name: var(--vt-name);
 }
 
 .timeline {
@@ -182,4 +210,41 @@ html[data-scroll-dir='down'] {
 .hover-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+}
+
+.swipe-card-container {
+  --card-translate-x: 0px;
+  --card-translate-y: 0px;
+  --card-rotate: 0deg;
+  --card-transition: none;
+  --card-like-opacity: 0;
+  --card-nope-opacity: 0;
+}
+.swipe-card-motion {
+  transform: translate(var(--card-translate-x), var(--card-translate-y)) rotate(var(--card-rotate));
+  transition: var(--card-transition);
+}
+.swipe-like-glow {
+  opacity: calc(var(--card-like-opacity) * 0.7);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(34,197,94,0.35), transparent 60%),
+    linear-gradient(120deg, rgba(34,197,94,0.25), transparent);
+  mix-blend-mode: screen;
+  transition: opacity 150ms ease;
+}
+.swipe-nope-glow {
+  opacity: calc(var(--card-nope-opacity) * 0.65);
+  background:
+    radial-gradient(circle at 80% 20%, rgba(239,68,68,0.4), transparent 55%),
+    linear-gradient(240deg, rgba(239,68,68,0.3), transparent);
+  mix-blend-mode: multiply;
+  transition: opacity 150ms ease;
+}
+.swipe-like-stamp {
+  opacity: var(--card-like-opacity);
+  transition: opacity 150ms ease;
+}
+.swipe-nope-stamp {
+  opacity: var(--card-nope-opacity);
+  transition: opacity 150ms ease;
 }

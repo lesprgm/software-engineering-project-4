@@ -1,4 +1,4 @@
-import React, { useCallback, useImperativeHandle, useRef, useState, forwardRef } from 'react';
+import React, { useCallback, useImperativeHandle, useRef, useState, forwardRef, CSSProperties } from 'react';
 import { clsx } from 'clsx';
 
 type Props = {
@@ -97,62 +97,62 @@ const SwipeCard = forwardRef<SwipeCardHandle, Props>(function SwipeCard(
       ? 18
       : -18
     : Math.max(-18, Math.min(18, dx / 12 + velocityTilt));
-  const style = leaving
-    ? { transform: `translate(${leaving === 'right' ? 500 : -500}px, 0px) rotate(${rotate}deg)`, transition: 'transform 250ms ease' as const }
-    : dragging
-    ? { transform: `translate(${dx}px, ${dy}px) rotate(${rotate}deg)` }
-    : dx || dy
-    ? { transform: 'translate(0, 0) rotate(0deg)', transition: 'transform 150ms ease' as const }
-    : undefined;
+  const translateX = leaving ? (leaving === 'right' ? 500 : -500) : dx;
+  const translateY = leaving ? 0 : dy;
+  const transitionValue =
+    leaving ? 'transform 250ms ease' : !dragging && (dx || dy) ? 'transform 150ms ease' : 'none';
+
+  type MotionVars = CSSProperties & {
+    '--card-translate-x'?: string;
+    '--card-translate-y'?: string;
+    '--card-rotate'?: string;
+    '--card-transition'?: string;
+  };
+  type OverlayVars = CSSProperties & {
+    '--card-like-opacity'?: string;
+    '--card-nope-opacity'?: string;
+  };
+
+  const motionVars: MotionVars = {
+    '--card-translate-x': `${translateX}px`,
+    '--card-translate-y': `${translateY}px`,
+    '--card-rotate': `${rotate}deg`,
+    '--card-transition': transitionValue,
+  };
 
   const likeOpacity = leaving === 'right' ? 1 : Math.min(1, Math.max(0, (dx - 20) / threshold));
   const nopeOpacity = leaving === 'left' ? 1 : Math.min(1, Math.max(0, (-dx - 20) / threshold));
+  const overlayVars: OverlayVars = {
+    '--card-like-opacity': likeOpacity.toString(),
+    '--card-nope-opacity': nopeOpacity.toString(),
+  };
 
   return (
     <div
-      className={clsx('relative touch-pan-y select-none', className)}
+      className={clsx('relative touch-pan-y select-none swipe-card-container', className)}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={cancel}
       role="group"
       aria-roledescription="swipeable card"
+      style={overlayVars}
     >
-      <div style={style} className="will-change-transform relative rounded-2xl overflow-hidden">
+      <div className="swipe-card-motion will-change-transform relative rounded-2xl overflow-hidden" style={motionVars}>
         {children}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-150"
-          style={{
-            opacity: likeOpacity * 0.7,
-            background:
-              'radial-gradient(circle at 20% 20%, rgba(34,197,94,0.35), transparent 60%), linear-gradient(120deg, rgba(34,197,94,0.25), transparent)',
-            mixBlendMode: 'screen',
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-150"
-          style={{
-            opacity: nopeOpacity * 0.65,
-            background:
-              'radial-gradient(circle at 80% 20%, rgba(239,68,68,0.4), transparent 55%), linear-gradient(240deg, rgba(239,68,68,0.3), transparent)',
-            mixBlendMode: 'multiply',
-          }}
-        />
+        <div aria-hidden className="pointer-events-none absolute inset-0 swipe-like-glow" />
+        <div aria-hidden className="pointer-events-none absolute inset-0 swipe-nope-glow" />
       </div>
       {/* Overlays */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 flex items-start justify-start p-4"
-        style={{ opacity: likeOpacity }}
+        className="pointer-events-none absolute inset-0 flex items-start justify-start p-4 swipe-like-stamp"
       >
         <span className="px-3 py-1 rounded-md border-2 border-green-600 text-green-700 font-bold bg-white/80">LIKE</span>
       </div>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 flex items-start justify-end p-4"
-        style={{ opacity: nopeOpacity }}
+        className="pointer-events-none absolute inset-0 flex items-start justify-end p-4 swipe-nope-stamp"
       >
         <span className="px-3 py-1 rounded-md border-2 border-red-600 text-red-700 font-bold bg-white/80">NOPE</span>
       </div>

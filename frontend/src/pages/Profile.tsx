@@ -95,7 +95,15 @@ export default function Profile() {
               </button>
             </div>
             <div className="text-sm text-gray-600">
-              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onAvatarChange} />
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onAvatarChange}
+                aria-label="Upload avatar"
+                title="Upload avatar"
+              />
               {uploading ? 'Uploading photo…' : 'PNG, JPG, or WebP · up to 5MB'}
               <button
                 className="mt-3 text-xs text-gray-500 underline block"

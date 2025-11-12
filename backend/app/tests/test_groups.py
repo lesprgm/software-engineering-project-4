@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from typing import Generator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,7 +15,7 @@ from app.main import app
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Generator[TestClient, None, None]:
     engine = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -59,6 +60,26 @@ def _create_user(client: TestClient, email: str, display_name: str) -> User:
         session.commit()
         session.refresh(user)
         return user
+
+
+def test_create_group_with_plain_token_without_owner_id(client: TestClient) -> None:
+    owner = _create_user(client, "plain-token@example.com", "Plain Token User")
+    headers = {"Authorization": f"Bearer {owner.id}"}
+
+    response = client.post(
+        "/groups/",
+        json={
+            "name": "Dev Token Group",
+            "description": "Created using dev bypass token only",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "Dev Token Group"
+    assert payload["invite_code"]
+    assert payload["id"]
 
 
 def test_group_scheduling_flow(client: TestClient) -> None:

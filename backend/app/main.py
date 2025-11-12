@@ -1,14 +1,16 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-import logging
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .database import Base, SessionLocal, engine
+from .models.user import User
 from .services.events import EventService
 from app.routers import ai, auth, direct_messages, events, groups, matches, places, users
 
@@ -20,6 +22,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+LOCALHOST_CORS_REGEX = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 # Create database tables on startup for local development.
 Base.metadata.create_all(bind=engine)
@@ -34,6 +37,23 @@ def apply_schema_patches() -> None:
         place_columns = get_columns(connection, "places")
         if "review_count" not in place_columns:
             connection.execute(text("ALTER TABLE places ADD COLUMN review_count INTEGER DEFAULT 0"))
+
+        if "latitude" not in place_columns:
+            connection.execute(text("ALTER TABLE places ADD COLUMN latitude FLOAT"))
+        if "longitude" not in place_columns:
+            connection.execute(text("ALTER TABLE places ADD COLUMN longitude FLOAT"))
+        if "created_at" not in place_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE places ADD COLUMN created_at DATETIME NOT NULL DEFAULT (datetime('now'))"
+                )
+            )
+        if "updated_at" not in place_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE places ADD COLUMN updated_at DATETIME NOT NULL DEFAULT (datetime('now'))"
+                )
+            )
 
         event_columns = get_columns(connection, "events")
         if "created_at" not in event_columns:
@@ -50,12 +70,78 @@ def apply_schema_patches() -> None:
                 )
             )
 
+        user_columns = get_columns(connection, "users")
+        if "password_hash" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN password_hash VARCHAR(255)")
+            )
+        if "bio" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN bio TEXT")
+            )
+        if "interests" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN interests TEXT DEFAULT '[]'")
+            )
+        if "photos" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN photos TEXT DEFAULT '[]'")
+            )
+        if "pronouns" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN pronouns TEXT")
+            )
+        if "location" not in user_columns:
+            connection.execute(
+                text("ALTER TABLE users ADD COLUMN location TEXT")
+            )
+        if "updated_at" not in user_columns:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN updated_at DATETIME NOT NULL DEFAULT (datetime('now'))"
+                )
+            )
+
 
 apply_schema_patches()
+
+
+def _ensure_demo_user(session: Session) -> None:
+    """Seed a friendly dev user so local features (groups, matches) function immediately."""
+    demo_profiles = [
+        {
+            "email": "dev@example.edu",
+            "display_name": "Dev User",
+            "bio": "Default campus connector profile for local testing.",
+            "interests": ["coffee", "hackathons", "sunset walks"],
+            "pronouns": "they/them",
+            "location": "Innovation Lab",
+        },
+    ]
+    created = False
+    for profile in demo_profiles:
+        exists = session.execute(select(User).where(User.email == profile["email"])).scalar_one_or_none()
+        if exists:
+            continue
+        user = User(
+            email=profile["email"],
+            display_name=profile["display_name"],
+            bio=profile["bio"],
+            interests=profile["interests"],
+            pronouns=profile["pronouns"],
+            location=profile["location"],
+        )
+        session.add(user)
+        created = True
+    if created:
+        session.commit()
+
+
 def seed_default_records() -> None:
-    session = SessionLocal()
+    session: Session = SessionLocal()
     try:
         EventService.seed_defaults(session)
+        _ensure_demo_user(session)
     finally:
         session.close()
 
@@ -74,6 +160,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=LOCALHOST_CORS_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
