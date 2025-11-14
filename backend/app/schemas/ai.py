@@ -110,6 +110,7 @@ class DirectChatRequest(BaseModel):
     user_name: str = Field(..., min_length=1)
     partner_name: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1)
+    partner_id: Optional[str] = Field(default=None, description="Optional identifier for demo personas")
 
 
 class DirectChatResponse(BaseModel):

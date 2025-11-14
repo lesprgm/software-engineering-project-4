@@ -95,6 +95,7 @@ export interface DirectChatRequest {
   user_name: string;
   partner_name: string;
   message: string;
+  partner_id?: string;
 }
 
 export interface DirectChatResponse {

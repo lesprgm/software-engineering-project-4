@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="gradPriya" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ec4899" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#f97316" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="url(#gradPriya)" />
+  <g fill="#fff" font-family="'Inter', 'Segoe UI', sans-serif" font-weight="700" text-anchor="middle">
+    <text x="256" y="300" font-size="200">P</text>
+    <text x="256" y="380" font-size="48" letter-spacing="10">VIBES</text>
+  </g>
+</svg>

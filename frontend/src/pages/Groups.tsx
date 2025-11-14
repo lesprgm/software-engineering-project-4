@@ -4,6 +4,7 @@ import { clsx } from 'clsx';
 import { useGroups, useCreateGroup } from '../hooks/useGroups';
 import { useAuthStore } from '../store/auth';
 import { useNotifications } from '../store/notifications';
+import { useToast } from '../components/ToastProvider';
 import Skeleton from '../components/ui/Skeleton';
 import { useViewNavigate } from '../hooks/useViewNavigate';
 import { useBreadcrumb } from '../hooks/useBreadcrumb';
@@ -47,6 +48,7 @@ export default function Groups() {
   const navigate = useViewNavigate();
   useBreadcrumb('Groups', { parent: '/' });
   const { notifications } = useNotifications();
+  const { notify } = useToast();
   const { data: groups, isLoading } = useGroups();
   const createGroup = useCreateGroup();
   
@@ -64,7 +66,10 @@ export default function Groups() {
 
   const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id || !groupName.trim()) return;
+    if (!user?.id || !groupName.trim()) {
+      notify('Please provide a group name', 'error');
+      return;
+    }
 
     try {
       await createGroup.mutateAsync({
@@ -75,8 +80,11 @@ export default function Groups() {
       setGroupName('');
       setGroupDescription('');
       setShowCreateForm(false);
+      notify('Group created successfully!', 'success');
     } catch (error) {
       console.error('Failed to create group:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create group. Please try again.';
+      notify(errorMessage, 'error');
     }
   };
 
@@ -88,10 +96,11 @@ export default function Groups() {
     setShowCreateForm(true);
   };
 
-  const cardsLoading = isLoading && !groups?.length;
-  const showFallback = (!groups || groups.length === 0) && !isLoading;
-  const groupsDisplay = useMemo(() => (showFallback ? FALLBACK_GROUPS : groups || []), [groups, showFallback]);
-  const noRealGroups = !cardsLoading && (!groups || groups.length === 0);
+  const groupsArray = Array.isArray(groups) ? groups : [];
+  const cardsLoading = isLoading && groupsArray.length === 0;
+  const showFallback = groupsArray.length === 0 && !isLoading;
+  const groupsDisplay = useMemo(() => (showFallback ? FALLBACK_GROUPS : groupsArray), [groupsArray, showFallback]);
+  const noRealGroups = !cardsLoading && groupsArray.length === 0;
 
   useEffect(() => {
     if (noRealGroups && !wizardAutoOpened) {

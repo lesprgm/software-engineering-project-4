@@ -11,6 +11,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
+from ..demo_personas import DemoPersona, DemoPersonaRegistry
 from ..models import AICacheEntry, Event, MatchIdea, MatchInsight, Place
 from ..schemas.ai import (
     DateIdea,
@@ -166,17 +167,29 @@ class AIService:
 
     @classmethod
     def generate_direct_reply(cls, payload: DirectChatRequest) -> str:
-        prompt = (
-            "You are role-playing as {partner}. Respond in 2 sentences, warm and upbeat, "
-            "mentioning campus life when relevant. Student {user} says: \"{message}\""
-        ).format(partner=payload.partner_name, user=payload.user_name, message=payload.message)
+        persona = DemoPersonaRegistry.get(payload.partner_id or payload.partner_name)
+        prompt = cls._compose_direct_prompt(payload, persona)
         try:
             reply, _ = cls._generate_and_moderate(prompt)
         except Exception:  # pragma: no cover - guardrail for unexpected provider issues
-            return cls._mock_direct_reply(payload)
+            return cls._mock_direct_reply(payload, persona)
         if reply.startswith("[mock-ai-"):
-            return cls._mock_direct_reply(payload)
+            return cls._mock_direct_reply(payload, persona)
         return reply.strip()
+
+    @staticmethod
+    def _compose_direct_prompt(payload: DirectChatRequest, persona: DemoPersona | None) -> str:
+        if persona:
+            return (
+                f"You are {persona.display_name}, {persona.tagline}. "
+                f"{persona.prompt} "
+                f"Answer in under 3 sentences, keep it grounded to campus life, "
+                f"and stay in first-person. Student {payload.user_name} says: \"{payload.message}\""
+            )
+        return (
+            "You are role-playing as {partner}. Respond in 2 sentences, warm and upbeat, "
+            "mentioning campus life when relevant. Student {user} says: \"{message}\""
+        ).format(partner=payload.partner_name, user=payload.user_name, message=payload.message)
 
     # --- Match helpers -----------------------------------------------------------
     @classmethod
@@ -466,19 +479,20 @@ class AIService:
 
     # --- Mock helpers -----------------------------------------------------------
     @staticmethod
-    def _mock_direct_reply(payload: DirectChatRequest) -> str:
+    def _mock_direct_reply(payload: DirectChatRequest, persona: DemoPersona | None = None) -> str:
         """Generate a friendly canned reply when Gemini is unavailable."""
         subject = payload.message.strip() or "that idea"
         if len(subject) > 80:
             subject = subject[:77].rstrip() + "…"
         user_first = (payload.user_name or "you").split()[0]
-        partner = payload.partner_name or "Gemini"
+        partner = (persona.display_name if persona else payload.partner_name) or "Gemini"
+        vibe = persona.tagline if persona else "campus buddy energy"
         templates = [
-            "Hey {user}! {partner} here — I’m vibing with “{subject}.” Want me to line up a few campus spots to match that energy?",
-            "{partner} checking in! “{subject}” sounds like prime quad-stroll material. I can queue up ideas if you’d like, {user}.",
-            "Love that thought, {user}! If “{subject}” is the mood, I’ve got lounges and makerspaces in mind. Want me to shortlist a couple?",
-            "{partner} to the rescue: “{subject}” has coffee walk written all over it. Need recs near the union?",
+            "Hey {user}! {partner} here ({vibe}). “{subject}” has me fired up—want me to line up a few campus spots to match that energy?",
+            "{partner} checking in ({vibe})! “{subject}” sounds like prime quad-stroll material. Want me to queue up ideas, {user}?",
+            "Love that thought, {user}! If “{subject}” is the vibe, I’ve got lounges and labs in mind. Want me to shortlist a couple?",
+            "{partner} to the rescue—“{subject}” screams coffee walk potential. Need recs near the union?",
         ]
         digest = int(sha256(f"{payload.user_name}:{payload.message}".encode("utf-8")).hexdigest(), 16)
         template = templates[digest % len(templates)]
-        return template.format(user=user_first, partner=partner.split()[0], subject=subject)
+        return template.format(user=user_first, partner=partner.split()[0], subject=subject, vibe=vibe)

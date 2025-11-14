@@ -93,7 +93,7 @@ def join_group(
 def get_invite_link(group_id: str, db: Session = Depends(get_db)) -> InviteLinkResponse:
     group = GroupService.get_group(db, group_id)
     url = GroupService.get_invite_link(group)
-    return InviteLinkResponse(group_id=group.id, invite_code=group.invite_code, shareable_url=url)
+    return InviteLinkResponse(invite_url=url)
 
 
 @router.post(

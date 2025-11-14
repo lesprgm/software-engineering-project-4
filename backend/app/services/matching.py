@@ -7,6 +7,7 @@ from typing import Iterable, List, Sequence, Set
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from ..demo_personas import DemoPersonaRegistry
 from ..models import Availability, Group, GroupMembership, User
 from ..schemas.group import GroupMatchCandidate
 from ..schemas.user import UserMatchCandidate
@@ -128,9 +129,18 @@ class MatchingService:
 
         primary_profile = cls._build_user_profile(db, primary_user)
         candidates: list[UserMatchCandidate] = []
-        other_users: Sequence[User] = db.execute(select(User).where(User.id != user_id)).scalars().all()
+        
+        # Query all other users and expire them from session to prevent detached instance errors
+        other_users_result = db.execute(select(User).where(User.id != user_id)).scalars().all()
+        # Convert to list to ensure objects are loaded before any session operations
+        other_users: list[User] = list(other_users_result)
 
         for user in other_users:
+            # Eagerly access all attributes to avoid lazy loading after session closes
+            user_id_val = user.id
+            display_name_val = user.display_name
+            photos_val = user.photos if user.photos else None
+            
             profile = cls._build_user_profile(db, user)
             score_data = cls._score_user_profiles(primary_profile, profile)
             overall = score_data["overall"]
@@ -138,15 +148,17 @@ class MatchingService:
                 continue
             candidates.append(
                 UserMatchCandidate(
-                    user_id=user.id,
-                    display_name=user.display_name,
+                    user_id=user_id_val,
+                    display_name=display_name_val,
                     compatibility_score=overall,
                     shared_interests=sorted(score_data["shared_interests"]),
                     schedule_score=score_data["schedule_score"],
                     personality_overlap=score_data["trait_score"],
+                    photos=photos_val,
                 )
             )
 
+        # Remove demo personas from matching feed
         candidates.sort(key=lambda candidate: candidate.compatibility_score, reverse=True)
         return candidates[:limit]
 

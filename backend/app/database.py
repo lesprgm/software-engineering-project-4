@@ -15,16 +15,13 @@ engine = create_engine(
     future=True,
 )
 
-SessionLocal = scoped_session(
-    session_factory=sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
-)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 
 Base = declarative_base()
 
 
 @contextmanager
 def session_scope() -> Generator:
-
     session = SessionLocal()
     try:
         yield session
@@ -37,7 +34,6 @@ def session_scope() -> Generator:
 
 
 def get_db() -> Generator:
-
     db = SessionLocal()
     try:
         yield db

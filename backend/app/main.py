@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .database import Base, SessionLocal, engine
 from .models.user import User
+from .models.user_match import UserMatch  # Import to ensure table creation
 from .services.events import EventService
-from app.routers import ai, auth, direct_messages, events, groups, matches, places, users
+from app.routers import ai, auth, calendar, direct_messages, events, groups, matches, places, users
 
 # Configure logging
 logging.basicConfig(
@@ -185,6 +186,7 @@ app.include_router(events.router, prefix="/api")
 app.include_router(matches.router)
 app.include_router(users.router)
 app.include_router(direct_messages.router)
+app.include_router(calendar.router)
 
 media_url_path = settings.media_base_url
 if not media_url_path.startswith("/"):

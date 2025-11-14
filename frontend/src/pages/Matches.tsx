@@ -10,7 +10,7 @@ import { DEFAULT_AVATAR } from '../lib/media';
 import { useAuthStore, User as AuthUser } from '../store/auth';
 import { useNotifications } from '../store/notifications';
 import { aiApi, MatchInsightRequest, ParticipantProfile } from '../services/ai';
-import { useGroupMatches, useGroups, useUserMatches } from '../hooks/useGroups';
+import { useGroupMatches, useGroups, useUserMatches, useRecordSwipe } from '../hooks/useGroups';
 import { useBreadcrumb } from '../hooks/useBreadcrumb';
 import { useViewNavigate } from '../hooks/useViewNavigate';
 import { ViewTransitionLink } from '../components/navigation/ViewTransitionLink';
@@ -27,6 +27,8 @@ type Suggestion = {
   schedule?: number;
   personality?: number;
   sharedGroups?: string[];
+  tagline?: string;
+  bio?: string;
 };
 
 type SwipeHistoryPayload = {
@@ -57,7 +59,9 @@ export default function Matches() {
   const [undoPrompt, setUndoPrompt] = useState<{ actionId: string; expires: number; name: string } | null>(null);
   const [traitIndex, setTraitIndex] = useState(0);
 
-  const { data: userCandidates, isLoading } = useUserMatches(currentUser?.id);
+  // Always call hooks unconditionally - required by React rules of hooks
+  const { data: userCandidates, isLoading } = useUserMatches(currentUser?.id || 'anonymous');
+  const recordSwipe = useRecordSwipe(currentUser?.id || 'anonymous');
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (type !== 'user' || !userCandidates) return [];
@@ -65,10 +69,13 @@ export default function Matches() {
       id: candidate.user_id,
       type: 'user',
       name: candidate.display_name,
+      avatarUrl: candidate.photos?.[0], // Use first photo from array
       interests: candidate.shared_interests,
       compatibility: candidate.compatibility_score,
       schedule: candidate.schedule_score,
       personality: candidate.personality_overlap,
+      tagline: candidate.tagline,
+      bio: candidate.bio,
     }));
   }, [type, userCandidates]);
 
@@ -137,9 +144,17 @@ export default function Matches() {
             if (!cancelled) setInsight(response.data.summary_text);
           } catch (generationError) {
             console.error('Unable to generate insight', generationError);
+            // Don't show error to user, just skip insight
+            if (!cancelled) {
+              setInsight(null);
+            }
           }
         } else {
           console.error('Unable to fetch insight', error);
+          // Don't show error to user, just skip insight
+          if (!cancelled) {
+            setInsight(null);
+          }
         }
       } finally {
         if (!cancelled) setInsightLoading(false);
@@ -172,7 +187,7 @@ export default function Matches() {
   const applySwipe = useCallback(
     (direction: 'left' | 'right', options?: { skipHistory?: boolean; actionId?: string; skipUndoPrompt?: boolean; silent?: boolean }) => {
       const target = current;
-      if (!target) return;
+      if (!target || !currentUser?.id) return;
       const actionId = options?.actionId ?? `${target.id}-${Date.now()}`;
       if (!options?.skipHistory) {
         pushHistory({
@@ -186,14 +201,31 @@ export default function Matches() {
         });
       }
 
+      // Record swipe in backend
+      recordSwipe.mutate({
+        target_user_id: target.id,
+        swiped_right: direction === 'right',
+      }, {
+        onSuccess: (response) => {
+          if (response.data.is_mutual_match) {
+            notify("It's a match! 🎉", 'success');
+            addNotification({
+              kind: 'match',
+              title: "It's a match!",
+              body: `You and ${target.name} liked each other!`,
+            });
+          }
+        },
+      });
+
       vibrate();
       if (direction === 'right') {
         addNotification({
           kind: 'match',
           title: 'Match saved',
-          body: `You added ${target.name} to your shortlist.`,
+          body: `You liked ${target.name}.`,
         });
-        notify('Saved to your shortlist', 'success');
+        notify('Liked!', 'success');
         setUndoPrompt(null);
       } else {
         addNotification({
@@ -219,7 +251,7 @@ export default function Matches() {
 
       setIndex((prev) => prev + 1);
     },
-    [addNotification, current, notify, pushHistory]
+    [addNotification, current, currentUser?.id, notify, pushHistory, recordSwipe]
   );
 
   const handleUndoAction = useCallback(
@@ -294,30 +326,31 @@ export default function Matches() {
   const heroTransitionId = current ? `match-hero-${current.id}` : undefined;
   const nameTransitionId = current ? `match-name-${current.id}` : undefined;
   const derivedInsight = insight || current.insight;
-  const highlightCards = useMemo(() => {
-    if (!current) return [];
-    const cards: { title: string; body: string }[] = [];
-    if (current.interests?.length) {
-      const preview = current.interests.slice(0, 3).join(', ');
-      cards.push({
-        title: 'Shared interests',
-        body: `You both enjoy ${preview}${current.interests.length > 3 ? '…' : ''}`,
-      });
-    }
-    if (typeof current.schedule === 'number') {
-      cards.push({
-        title: 'Schedule fit',
-        body: `${Math.round(current.schedule * 100)}% of your availability lines up.`,
-      });
-    }
-    if (typeof current.personality === 'number') {
-      cards.push({
-        title: 'Vibe check',
-        body: current.personality > 0.6 ? 'Personalities click effortlessly.' : 'Opposites attract—could be fun!',
-      });
-    }
-    return cards;
-  }, [current]);
+  const highlightCards = current
+    ? (() => {
+        const cards: { title: string; body: string }[] = [];
+        if (current.interests?.length) {
+          const preview = current.interests.slice(0, 3).join(', ');
+          cards.push({
+            title: 'Shared interests',
+            body: `You both enjoy ${preview}${current.interests.length > 3 ? '…' : ''}`,
+          });
+        }
+        if (typeof current.schedule === 'number') {
+          cards.push({
+            title: 'Schedule fit',
+            body: `${Math.round(current.schedule * 100)}% of your availability lines up.`,
+          });
+        }
+        if (typeof current.personality === 'number') {
+          cards.push({
+            title: 'Vibe check',
+            body: current.personality > 0.6 ? 'Personalities click effortlessly.' : 'Opposites attract—could be fun!',
+          });
+        }
+        return cards;
+      })()
+    : [];
 
   return (
     <div className="max-w-3xl mx-auto space-y-4">
@@ -405,6 +438,9 @@ export default function Matches() {
                       </span>
                     )}
                   </div>
+                  {current.tagline && (
+                    <div className="mt-1 text-sm text-white/80">{current.tagline}</div>
+                  )}
                   {!!current.interests?.length && (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {current.interests.slice(0, 6).map((tag) => (
@@ -539,15 +575,18 @@ function buildInsightRequest(target: Suggestion, user?: AuthUser | null): MatchI
       name: user.displayName || user.name,
       bio: user.email,
       interests: user.interests || [],
+      shared_activities: [],
     });
   }
   participants.push({
     name: target.name,
     interests: target.interests || [],
+    shared_activities: [],
   });
   return {
     participants,
     shared_interests: target.interests || [],
+    shared_activities: [],
     location: 'Campus',
     mood: target.type === 'group' ? 'collaborative' : 'upbeat',
   };
@@ -558,12 +597,14 @@ function GroupMatchView({ currentUserId }: { currentUserId: string }) {
   const navigate = useViewNavigate();
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
+  // Always call hooks before any conditional returns
+  const { data: groupMatchData, isLoading: matchesLoading } = useGroupMatches(selectedGroupId ?? '');
+
   useEffect(() => {
     if (!groups?.length) return;
     if (!selectedGroupId) setSelectedGroupId(groups[0].id);
   }, [groups, selectedGroupId]);
 
-  const { data: groupMatchData, isLoading: matchesLoading } = useGroupMatches(selectedGroupId ?? '');
   const candidates = groupMatchData?.candidates ?? [];
   const activeGroup = groups?.find((group) => group.id === selectedGroupId) || null;
 

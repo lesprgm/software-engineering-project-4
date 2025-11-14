@@ -6,9 +6,10 @@ import Button from '../components/ui/Button';
 import { useAuthStore } from '../store/auth';
 import { useNotifications } from '../store/notifications';
 import { groupsApi } from '../services/groups';
-import { useGroups, useUserMatches } from '../hooks/useGroups';
+import { useGroups, useRightSwipes } from '../hooks/useGroups';
 import { useBreadcrumb } from '../hooks/useBreadcrumb';
 import { aiApi } from '../services/ai';
+import MeetupAlert from '../components/MeetupAlert';
 
 type GroupMessage = {
   id: number | string;
@@ -37,10 +38,15 @@ export default function Messages() {
   const directInputRef = useRef<HTMLInputElement>(null);
   const directScrollRef = useRef<HTMLDivElement>(null);
   const { data: groups, isLoading: groupsLoading } = useGroups();
-  const { data: matches } = useUserMatches(me?.id);
+  const { data: matches } = useRightSwipes(me?.id);  // Show anyone you swiped right on (demo mode)
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [activeDirectId, setActiveDirectId] = useState<string | null>(null);
   const [mode, setMode] = useState<ViewMode>('groups');
+  const [meetupAlert, setMeetupAlert] = useState<{
+    message: string;
+    partnerName: string;
+    partnerEmail?: string;
+  } | null>(null);
 
   const [searchParams] = useSearchParams();
   useBreadcrumb('Messages', { parent: '/' });
@@ -131,10 +137,13 @@ export default function Messages() {
     if (!activeDirectId || !activeDirect) return;
     setDirectThreads((prev) => {
       if (prev[activeDirectId]) return prev;
+      const introLine = activeDirect.tagline
+        ? `${activeDirect.tagline} (powered by Gemini).`
+        : "I'm powered by Gemini, so feel free to bounce ideas off me.";
       const intro: DirectEntry = {
         id: `${activeDirectId}-intro`,
         senderId: activeDirectId,
-        content: `Hey! I'm ${activeDirect.display_name || activeDirect.name}. I'm powered by Gemini, so feel free to bounce ideas off me.`,
+        content: `Hey! I'm ${activeDirect.display_name}. ${introLine}`,
         createdAt: new Date().toISOString(),
       };
       return { ...prev, [activeDirectId]: [intro] };
@@ -157,6 +166,7 @@ export default function Messages() {
         user_name: me.displayName || me.name || 'You',
         partner_name: variables.partnerName || 'Gemini',
         message: variables.message,
+        partner_id: variables.partnerId,
       });
     },
     onMutate: (variables) => {
@@ -169,6 +179,14 @@ export default function Messages() {
       };
       appendDirectEntry(variables.partnerId, entry);
       setAiTyping((prev) => ({ ...prev, [variables.partnerId]: true }));
+      
+      // Show meetup alert for potential date proposals
+      setMeetupAlert({
+        message: variables.message,
+        partnerName: variables.partnerName,
+        partnerEmail: undefined, // Can be added if needed
+      });
+      
       if (directInputRef.current) {
         directInputRef.current.value = '';
       }
@@ -251,6 +269,9 @@ export default function Messages() {
                   aria-label={`Open chat with ${candidate.display_name}`}
                 >
                   <div className="font-medium">{candidate.display_name}</div>
+                  {candidate.tagline && (
+                    <div className="text-xs text-gray-500">{candidate.tagline}</div>
+                  )}
                   <div className="text-xs text-gray-500">Compatibility {(candidate.compatibility_score * 100).toFixed(0)}%</div>
                 </button>
               ))}
@@ -316,6 +337,16 @@ export default function Messages() {
               <div className="border-b px-4 py-2 font-semibold">
                 {activeDirect ? activeDirect.display_name : 'Select a match'}
               </div>
+              {meetupAlert && (
+                <div className="px-4 pt-4">
+                  <MeetupAlert
+                    message={meetupAlert.message}
+                    partnerName={meetupAlert.partnerName}
+                    partnerEmail={meetupAlert.partnerEmail}
+                    onDismiss={() => setMeetupAlert(null)}
+                  />
+                </div>
+              )}
               <div ref={directScrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
                 {directMessages.map((message) => {
                   const mine = message.senderId === me?.id;

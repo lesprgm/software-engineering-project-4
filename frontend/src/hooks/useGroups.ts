@@ -159,3 +159,39 @@ export function useUserMatches(userId?: string) {
     },
   });
 }
+
+export function useMutualMatches(userId?: string) {
+  return useQuery({
+    queryKey: userId ? [...groupKeys.all, 'mutual-matches', userId] : ['mutual-matches', 'anonymous'],
+    enabled: !!userId,
+    queryFn: async () => {
+      const response = await matchesService.getMutualMatches(userId!);
+      return response.data.candidates;
+    },
+  });
+}
+
+export function useRightSwipes(userId?: string) {
+  return useQuery({
+    queryKey: userId ? [...groupKeys.all, 'right-swipes', userId] : ['right-swipes', 'anonymous'],
+    enabled: !!userId,
+    queryFn: async () => {
+      const response = await matchesService.getRightSwipes(userId!);
+      return response.data.candidates;
+    },
+  });
+}
+
+export function useRecordSwipe(userId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (swipe: { target_user_id: string; swiped_right: boolean }) =>
+      matchesService.recordSwipe(userId, swipe),
+    onSuccess: () => {
+      // Invalidate match candidates, mutual matches, and right swipes
+      queryClient.invalidateQueries({ queryKey: groupKeys.userMatches(userId) });
+      queryClient.invalidateQueries({ queryKey: [...groupKeys.all, 'mutual-matches', userId] });
+      queryClient.invalidateQueries({ queryKey: [...groupKeys.all, 'right-swipes', userId] });
+    },
+  });
+}

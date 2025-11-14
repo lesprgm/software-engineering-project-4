@@ -57,7 +57,20 @@ class UserMatchCandidate(BaseModel):
     shared_interests: List[str]
     schedule_score: float
     personality_overlap: float
+    bio: Optional[str] = None
+    tagline: Optional[str] = None
+    photos: Optional[List[str]] = None
 
 
 class UserMatchResponse(BaseModel):
     candidates: List[UserMatchCandidate]
+
+
+class SwipeAction(BaseModel):
+    target_user_id: str
+    swiped_right: bool  # True = right swipe (interested), False = left swipe (not interested)
+
+
+class SwipeResponse(BaseModel):
+    is_mutual_match: bool
+    message: str
